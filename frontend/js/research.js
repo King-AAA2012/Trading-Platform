@@ -25,7 +25,7 @@
   // ---------------- charts
   const base = {
     autoSize: true,
-    layout: { background: { color: "#0e1219" }, textColor: "#8791a6", fontFamily: "JetBrains Mono, monospace", fontSize: 11 },
+    layout: { background: { color: "#0e1219" }, textColor: "#8791a6", fontFamily: "Cascadia Mono, Consolas, ui-monospace, monospace", fontSize: 11 },
     grid: { vertLines: { color: "#141b27" }, horzLines: { color: "#141b27" } },
     rightPriceScale: { borderColor: "#1d2533", minimumWidth: 70 },
     timeScale: { borderColor: "#1d2533", rightOffset: 4 },

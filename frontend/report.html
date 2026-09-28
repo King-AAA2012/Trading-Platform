@@ -4,18 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TradeScope Report</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root { --ink: #0f1522; --muted: #5d6679; --line: #e3e7ef; --up: #0a9a5c; --down: #d42b4a; --accent: #3f6dff; --bg: #f4f6fa; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 13.5px/1.55 Inter, system-ui, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13.5px/1.55 system-ui, "Segoe UI", -apple-system, Roboto, sans-serif; }
   .page { max-width: 960px; margin: 24px auto; background: #fff; border-radius: 14px; box-shadow: 0 10px 40px rgba(15,21,34,.08); padding: 36px 44px; }
   .bar { max-width: 960px; margin: 16px auto 0; display: flex; gap: 8px; justify-content: flex-end; padding: 0 16px; }
   .bar button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 7px 14px; cursor: pointer; font: inherit; }
   .bar button.p { background: var(--accent); color: #fff; border-color: var(--accent); }
   h1 { margin: 0; font-size: 26px; } h2 { font-size: 15px; margin: 26px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--ink); text-transform: uppercase; letter-spacing: .8px; }
-  .mono, .num { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
+  .mono, .num { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
   .muted { color: var(--muted); } .up { color: var(--up); } .down { color: var(--down); }
   .hdr { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; border-bottom: 1px solid var(--line); padding-bottom: 16px; }
   .verdict { display: flex; gap: 18px; align-items: center; background: linear-gradient(135deg, #f0f4ff, #f7f2ff); border-radius: 12px; padding: 16px 20px; margin-top: 18px; }
@@ -23,7 +21,7 @@
   .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .grid div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
   .grid label { display: block; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-  .grid b { font-family: "JetBrains Mono", monospace; font-size: 14px; }
+  .grid b { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 14px; }
   table { width: 100%; border-collapse: collapse; } th, td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; }
   th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; } td.r, th.r { text-align: right; }
   ul { padding-left: 18px; } li { margin: 4px 0; }

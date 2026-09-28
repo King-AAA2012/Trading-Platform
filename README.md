@@ -7,11 +7,27 @@ short or avoid, and exactly how much** for your budget, builds a **multi-market 
 
 > **Research only.** TradeScope has no broker connection and cannot place trades. Nothing here is financial advice.
 
+## What it costs: $0
+
+Everything runs on your own PC or on free public data. There are no accounts, API keys, subscriptions or cloud bills.
+
+| Part | What it uses | Cost |
+|---|---|---|
+| App server | Python + FastAPI, runs locally on `127.0.0.1` | Free, open source |
+| Market data | Yahoo Finance public endpoints (2 hosts with failover) + Google News RSS | Free, no key |
+| Offline mode | Last good price history saved in `data/hist/`, used automatically when offline | Free, local |
+| AI analyst and What-If parsing | [Ollama](https://ollama.com) + Llama 3.1 8B, on your machine | Free, local |
+| Charts | TradingView Lightweight Charts, bundled in `frontend/vendor/` (Apache-2.0) | Free, local |
+| Fonts | Your system fonts | Free, local |
+
+Without Ollama, every feature still works: reports use the rules engine, and What-If uses the keyword rulebook.
+Yahoo's endpoints are unofficial, so data can be delayed or occasionally unavailable. The offline cache covers gaps.
+
 ## Quick start (Windows)
 
-1. Install [Python 3.10+](https://python.org) and, optionally, [Ollama](https://ollama.com) for the AI analyst:
-   `ollama pull llama3.1:8b`
-2. Double-click **`start.bat`**. It installs dependencies, starts Ollama if present, and opens http://127.0.0.1:8420
+1. Install [Python 3.10+](https://python.org) (free).
+2. Double-click **`start.bat`**. It installs the Python packages, offers to install Ollama for free, downloads the
+   free AI model once, and opens http://127.0.0.1:8420
 3. Click **⧉ Open Research Screen**. In Chrome or Edge the window opens straight onto your second monitor
    (allow the "window management" prompt). Otherwise, drag it over.
 
@@ -100,7 +116,7 @@ a rules-based report is shown instead.
 
 Yahoo Finance public endpoints (prices, fundamentals, news) plus Google News RSS. Data may be delayed. Uses the OS
 certificate store (`truststore`) so antivirus HTTPS scanning doesn't break requests. Charts:
-[TradingView Lightweight Charts™](https://www.tradingview.com/lightweight-charts/) (downloaded once and cached).
+[TradingView Lightweight Charts™](https://www.tradingview.com/lightweight-charts/) (bundled, Apache-2.0).
 
 ## Layout
 

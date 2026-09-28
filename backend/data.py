@@ -23,6 +23,9 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
 Q1 = "https://query1.finance.yahoo.com"
+HOSTS = [Q1, "https://query2.finance.yahoo.com"]      # two free public hosts; fail over between them
+HIST_DIR = DATA_DIR / "hist"
+HIST_DIR.mkdir(exist_ok=True)
 
 SUBUNIT = {"GBp": ("GBP", 100.0), "GBX": ("GBP", 100.0), "ZAc": ("ZAR", 100.0), "ILA": ("ILS", 100.0)}
 _session = requests.Session()
@@ -63,11 +66,11 @@ def _get_crumb(force: bool = False) -> str:
 
 def _yget(path: str, params: dict | None = None, crumb: bool = False, timeout: float = 20):
     params = dict(params or {})
-    for attempt in range(3):
+    for attempt in range(4):
         if crumb:
             params["crumb"] = _get_crumb(force=attempt > 0)
         try:
-            r = _session.get(Q1 + path, params=params, timeout=timeout)
+            r = _session.get(HOSTS[attempt % 2] + path, params=params, timeout=timeout)
         except requests.RequestException:
             time.sleep(0.6 * (attempt + 1))
             continue
@@ -114,7 +117,25 @@ def yahoo_history(symbol: str, rng: str = "2y", interval: str = "1d") -> dict | 
                      "high52": (m.get("fiftyTwoWeekHigh") or float("nan")) / div, "low52": (m.get("fiftyTwoWeekLow") or float("nan")) / div},
         }
     ttl = 60 if interval not in ("1d", "1wk", "1mo") else 600
-    return cached(f"hist:{symbol}:{rng}:{interval}", ttl, load)
+    daily = interval == "1d" and rng in ("2y", "5y")
+
+    def load_or_disk():
+        h = load()
+        f = HIST_DIR / f"{symbol.replace('/', '_').replace('^', 'IDX_').replace('=', '_')}_{rng}.json"
+        if h is not None and daily:          # remember the last good copy so the app keeps working offline
+            try:
+                f.write_text(json.dumps({k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in h.items()}), "utf-8")
+            except Exception:
+                pass
+        elif h is None and daily and f.exists():
+            try:
+                j = json.loads(f.read_text("utf-8"))
+                h = {k: (np.array(v, dtype=np.int64 if k == "t" else np.float64) if k in ("t", "o", "h", "l", "c", "v") else v) for k, v in j.items()}
+                h["meta"]["stale"] = True
+            except Exception:
+                h = None
+        return h
+    return cached(f"hist:{symbol}:{rng}:{interval}", ttl, load_or_disk)
 
 
 def get_history(symbol: str, rng: str = "2y", interval: str = "1d") -> dict | None:

@@ -401,7 +401,7 @@ VENDOR = ROOT / "frontend" / "vendor"
 
 @app.get("/vendor/lwc.js")
 def vendor_lwc():
-    """TradingView lightweight-charts, cached locally after the first download so the app works offline."""
+    """TradingView Lightweight Charts (Apache-2.0), bundled in frontend/vendor so the app runs fully offline."""
     p = VENDOR / "lightweight-charts.js"
     if not p.exists():
         VENDOR.mkdir(exist_ok=True)
