@@ -1,5 +1,5 @@
-"""Market presets: each is a scan universe plus a benchmark used for relative strength.
-Any Yahoo symbol worldwide can also be analysed directly through search, even if it is not in a preset."""
+"""Markets: curated asset-class presets plus every country's stock market (largest companies by market cap, pulled
+live from the Yahoo screener). Any Yahoo symbol worldwide can also be analysed directly through search."""
 
 PRESETS = {
     "us": {"name": "US Large Caps", "flag": "🇺🇸", "benchmark": "^GSPC", "currency": "USD", "shortable": True, "symbols": [
@@ -46,31 +46,88 @@ PRESETS = {
         "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU", "XLRE", "SMH", "ARKK", "BITO", "VNQ"]},
 }
 
+PRESETS.update({
+    "indices": {"name": "World Stock Indices", "flag": "🌍", "benchmark": None, "currency": "USD", "shortable": True, "fractional": True, "group": "Asset classes", "symbols": [
+        "^GSPC", "^IXIC", "^DJI", "^RUT", "^GSPTSE", "^BVSP", "^MXX", "^MERV", "^FTSE", "^GDAXI", "^FCHI", "^STOXX50E", "^IBEX", "FTSEMIB.MI",
+        "^AEX", "^SSMI", "^OMX", "^N225", "^HSI", "000001.SS", "^KS11", "^TWII", "^NSEI", "^BSESN", "^AXJO", "^NZ50", "^STI", "^JKSE", "^KLSE",
+        "^SET.BK", "XU100.IS", "TA35.TA", "^TASI.SR", "^J203.JO", "^CASE30"]},
+    "bonds": {"name": "Bonds & Rates (ETFs)", "flag": "🏦", "benchmark": "AGG", "currency": "USD", "shortable": True, "group": "Asset classes", "symbols": [
+        "AGG", "BND", "TLT", "IEF", "SHY", "TIP", "LQD", "HYG", "JNK", "EMB", "BNDX", "MUB", "VCIT", "VGSH", "GOVT", "IGOV", "BWX", "SGOV", "MBB", "FLOT"]},
+})
+for k in PRESETS:
+    PRESETS[k].setdefault("group", "Asset classes" if k in ("crypto", "forex", "commodities", "etfs") else "Curated stock markets")
+
+# Every country Yahoo covers: (name, flag, benchmark index, shortable, continent group)
+REGIONS = {
+    "us": ("United States · top 100", "🇺🇸", "^GSPC", True, "Americas"), "ca": ("Canada", "🇨🇦", "^GSPTSE", True, "Americas"),
+    "br": ("Brazil", "🇧🇷", "^BVSP", True, "Americas"), "mx": ("Mexico", "🇲🇽", "^MXX", True, "Americas"),
+    "ar": ("Argentina", "🇦🇷", "^MERV", False, "Americas"), "cl": ("Chile", "🇨🇱", "^IPSA", False, "Americas"),
+    "gb": ("United Kingdom", "🇬🇧", "^FTSE", True, "Europe"), "de": ("Germany", "🇩🇪", "^GDAXI", True, "Europe"),
+    "fr": ("France", "🇫🇷", "^FCHI", True, "Europe"), "ch": ("Switzerland", "🇨🇭", "^SSMI", True, "Europe"),
+    "nl": ("Netherlands", "🇳🇱", "^AEX", True, "Europe"), "es": ("Spain", "🇪🇸", "^IBEX", True, "Europe"),
+    "it": ("Italy", "🇮🇹", "FTSEMIB.MI", True, "Europe"), "se": ("Sweden", "🇸🇪", "^OMX", True, "Europe"),
+    "no": ("Norway", "🇳🇴", None, True, "Europe"), "dk": ("Denmark", "🇩🇰", None, True, "Europe"),
+    "fi": ("Finland", "🇫🇮", None, True, "Europe"), "be": ("Belgium", "🇧🇪", "^BFX", True, "Europe"),
+    "at": ("Austria", "🇦🇹", "^ATX", True, "Europe"), "ie": ("Ireland", "🇮🇪", None, True, "Europe"),
+    "pt": ("Portugal", "🇵🇹", None, True, "Europe"), "pl": ("Poland", "🇵🇱", None, False, "Europe"),
+    "gr": ("Greece", "🇬🇷", None, False, "Europe"), "cz": ("Czechia", "🇨🇿", None, False, "Europe"),
+    "hu": ("Hungary", "🇭🇺", None, False, "Europe"), "tr": ("Turkey", "🇹🇷", "XU100.IS", False, "Europe"),
+    "is": ("Iceland", "🇮🇸", None, False, "Europe"), "ee": ("Estonia", "🇪🇪", None, False, "Europe"),
+    "jp": ("Japan", "🇯🇵", "^N225", True, "Asia-Pacific"), "cn": ("China (Shanghai/Shenzhen)", "🇨🇳", "000001.SS", False, "Asia-Pacific"),
+    "hk": ("Hong Kong", "🇭🇰", "^HSI", True, "Asia-Pacific"), "in": ("India", "🇮🇳", "^NSEI", False, "Asia-Pacific"),
+    "kr": ("South Korea", "🇰🇷", "^KS11", False, "Asia-Pacific"), "tw": ("Taiwan", "🇹🇼", "^TWII", False, "Asia-Pacific"),
+    "au": ("Australia", "🇦🇺", "^AXJO", True, "Asia-Pacific"), "nz": ("New Zealand", "🇳🇿", "^NZ50", True, "Asia-Pacific"),
+    "sg": ("Singapore", "🇸🇬", "^STI", True, "Asia-Pacific"), "my": ("Malaysia", "🇲🇾", "^KLSE", False, "Asia-Pacific"),
+    "id": ("Indonesia", "🇮🇩", "^JKSE", False, "Asia-Pacific"), "th": ("Thailand", "🇹🇭", "^SET.BK", False, "Asia-Pacific"),
+    
+    "il": ("Israel", "🇮🇱", "TA35.TA", True, "Middle East & Africa"), "sa": ("Saudi Arabia", "🇸🇦", "^TASI.SR", False, "Middle East & Africa"),
+    "qa": ("Qatar", "🇶🇦", None, False, "Middle East & Africa"),
+    "za": ("South Africa", "🇿🇦", "^J203.JO", True, "Middle East & Africa"),
+}
+
 MACRO = [
     ("^GSPC", "S&P 500"), ("^IXIC", "Nasdaq"), ("^DJI", "Dow"), ("^RUT", "Russell 2k"), ("^VIX", "VIX"), ("^TNX", "US 10Y"),
     ("DX-Y.NYB", "Dollar"), ("GC=F", "Gold"), ("CL=F", "Crude"), ("BTC-USD", "Bitcoin"), ("^NSEI", "Nifty 50"),
     ("^FTSE", "FTSE 100"), ("^GDAXI", "DAX"), ("^N225", "Nikkei"), ("^HSI", "Hang Seng"), ("EURUSD=X", "EUR/USD"),
 ]
+# home-exchange suffixes ("" = no suffix, i.e. US listings) and extra reporting currencies allowed for real domestic firms
+SUFFIX = {"us": ("",), "ca": (".TO", ".V"), "br": (".SA",), "mx": (".MX",), "ar": (".BA",), "cl": (".SN",), "co": (".CL",), "pe": (".LM",),
+          "gb": (".L",), "de": (".DE",), "fr": (".PA",), "ch": (".SW",), "nl": (".AS",), "es": (".MC",), "it": (".MI",), "se": (".ST",),
+          "no": (".OL",), "dk": (".CO",), "fi": (".HE",), "be": (".BR",), "at": (".VI",), "ie": (".IR",), "pt": (".LS",), "pl": (".WA",),
+          "gr": (".AT",), "cz": (".PR",), "hu": (".BD",), "tr": (".IS",), "is": (".IC",), "ee": (".TL",), "jp": (".T",), "cn": (".SS", ".SZ"),
+          "hk": (".HK",), "in": (".NS",), "kr": (".KS", ".KQ"), "tw": (".TW", ".TWO"), "au": (".AX",), "nz": (".NZ",), "sg": (".SI",),
+          "my": (".KL",), "id": (".JK",), "th": (".BK",), "ph": (".PS",), "vn": (".VN",), "pk": (".KA",), "lk": (".CM",), "il": (".TA",),
+          "sa": (".SR",), "qa": (".QA",), "kw": (".KW",), "eg": (".CA",), "za": (".JO",)}
+HOME_CCY = {"ar": "ARS"}
+# exchanges where cross-listings can't be filtered reliably: use the official index members instead
+CURATED = {
+    "de": [x + ".DE" for x in "ADS AIR ALV BAS BAYN BEI BMW BNR CBK CON DB1 DBK DHL DTE DTG ENR EOAN FRE FME G1A HEI HEN3 HNR1 IFX MBG MRK MTX MUV2 P911 PAH3 QIA RHM RWE SAP SHL SIE SRT3 SY1 VNA VOW3 ZAL".split()],
+    "at": [x + ".VI" for x in "ANDR BG CAI DOC EBS EVN IIA LNZ OMV POST RBI SBO STR TKA UQA VER VIG VOE WIE ATS".split()],
+}
+FIN_CCY = {"gb": ("GBP", "USD", "EUR"), "hk": ("HKD", "CNY", "USD"), "nl": ("EUR", "USD"), "no": ("NOK", "USD", "EUR"), "il": ("ILS", "USD"),
+           "ch": ("CHF", "USD", "EUR"), "sg": ("SGD", "USD"), "dk": ("DKK", "EUR", "USD"), "se": ("SEK", "EUR", "USD"), "ie": ("EUR", "USD"),
+           "za": ("ZAR", "USD"), "au": ("AUD", "USD"), "ca": ("CAD", "USD"), "us": ()}
 
 
 def all_markets() -> list[dict]:
-    from . import custom, simulator
-    out = [{"id": k, "name": v["name"], "flag": v["flag"], "count": len(v["symbols"]), "kind": "real", "currency": v["currency"]}
+    out = [{"id": k, "name": v["name"], "flag": v["flag"], "count": len(v["symbols"]), "group": v["group"], "currency": v["currency"]}
            for k, v in PRESETS.items()]
-    out.append({"id": "sim", "name": simulator.MARKET_NAME, "flag": "🐺", "count": len(simulator.COMPANIES), "kind": "sim", "currency": "USD"})
-    for m in custom.list_markets():
-        out.append({"id": m["id"], "name": m["name"], "flag": "🧪", "count": len(m["tickers"]), "kind": "custom", "currency": m.get("currency", "USD")})
+    for code, (name, flag, _, _, grp) in REGIONS.items():
+        out.append({"id": f"r-{code}", "name": name, "flag": flag, "count": 100 if code == "us" else 60, "group": grp, "currency": ""})
     return out
 
 
 def market_def(market_id: str) -> dict:
-    from . import custom, simulator
     if market_id in PRESETS:
         return PRESETS[market_id]
-    if market_id == "sim":
-        return simulator.market_def()
-    m = custom.get_market(market_id)
-    if m:
-        return {"name": m["name"], "benchmark": None, "currency": m.get("currency", "USD"), "shortable": True,
-                "fractional": False, "symbols": [f"CUS:{market_id}:{s}" for s in m["tickers"]]}
+    if market_id.startswith("r-") and market_id[2:] in REGIONS:
+        code = market_id[2:]
+        name, flag, bench, shortable, grp = REGIONS[code]
+        from . import data
+        if code in CURATED:
+            return {"name": name, "flag": flag, "benchmark": bench, "currency": "EUR", "shortable": shortable, "group": grp,
+                    "symbols": CURATED[code], "equalWeightBench": bench is None}
+        rows = data.screener(code, 100 if code == "us" else 60, SUFFIX.get(code, ()), FIN_CCY.get(code, ("__local__",)), HOME_CCY.get(code))
+        return {"name": name, "flag": flag, "benchmark": bench, "currency": (rows[0]["currency"] if rows else ""), "shortable": shortable,
+                "group": grp, "symbols": [r["symbol"] for r in rows], "equalWeightBench": bench is None}
     raise KeyError(market_id)

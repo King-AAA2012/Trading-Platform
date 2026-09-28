@@ -103,12 +103,13 @@
     if (!p) p = await api("/api/plan", { body: {} });
     const c = p.currency;
     document.title = `Daily Portfolio Plan · TradeScope`;
-    $("#page").innerHTML = `<div class="hdr"><div><div class="muted" style="font-size:11px;letter-spacing:1px">TRADESCOPE DAILY PORTFOLIO PLAN</div><h1>${esc(p.market)}</h1><div class="muted">${esc(p.profile)} profile · ${new Date(p.generated * 1000).toLocaleString()}</div></div>
+    $("#page").innerHTML = `<div class="hdr"><div><div class="muted" style="font-size:11px;letter-spacing:1px">TRADESCOPE DAILY PORTFOLIO PLAN</div><h1>${esc(p.market)}</h1><div class="muted">${esc(p.profile)} profile · ${new Date(p.generated * 1000).toLocaleString()}</div>${p.scenario ? `<div style="margin-top:4px">🔮 Scenario: <b>${esc(p.scenario)}</b></div>` : ""}</div>
       <div style="text-align:right"><div class="muted">Equity</div><div class="num" style="font-size:24px;font-weight:600">${money(p.equity, c)}</div></div></div>
       <div class="grid" style="margin-top:16px"><div><label>Cash before</label><b>${money(p.cashStart, c)}</b></div><div><label>Cash after</label><b>${money(p.cashEnd, c)}</b></div><div><label>Positions</label><b>${p.positions}</b></div><div><label>Risk at stops</label><b class="down">${money(p.totalRisk, c)}</b></div></div>
       <h2>Today's actions</h2><table><tr><th>Action</th><th>Instrument</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Value (${esc(c)})</th><th class="r">Stop</th><th class="r">Target</th></tr>
         ${p.actions.map((a) => `<tr><td><span class="tag ${a.action}">${a.action}</span></td><td><b>${esc(disp(a.symbol))}</b> <span class="muted">${esc(a.name || "")}</span><div class="muted" style="font-size:11.5px">${esc(a.reason)}</div></td>
           <td class="r num">${a.qty ?? ""}</td><td class="r num">${price(a.price)}</td><td class="r num">${money(a.value, "")}</td><td class="r num down">${a.stop ? price(a.stop) : ""}</td><td class="r num up">${a.target ? price(a.target) : ""}</td></tr>`).join("")}</table>
+      ${(p.byMarket || []).length > 1 ? `<h2>By market</h2><table><tr><th>Market</th><th class="r">Value</th><th class="r">Weight</th></tr>${p.byMarket.map((m) => `<tr><td>${esc(m.market)}</td><td class="r num">${money(m.value, c)}</td><td class="r num">${((m.value / p.equity) * 100).toFixed(1)}%</td></tr>`).join("")}</table>` : ""}
       <h2>Target allocation</h2><table><tr><th>Holding</th><th>Sector</th><th class="r">Value</th><th class="r">Weight</th></tr>
         ${p.allocation.map((a) => `<tr><td><b>${esc(disp(a.symbol))}</b> <span class="muted">${esc(a.name)}</span></td><td>${esc(a.sector)}</td><td class="r num">${money(a.value, c)}</td><td class="r num">${((a.value / p.equity) * 100).toFixed(1)}%</td></tr>`).join("")}</table>
       <h2>Rules applied</h2><ul><li>Risk per idea: ${(p.rules.riskPerTrade * 100).toFixed(1)}% of equity between entry and stop, scaled by confidence</li><li>Max position: ${(p.rules.maxPosition * 100).toFixed(0)}% · Max positions: ${p.rules.maxPositions} · Sector cap: ${(p.rules.sectorCap * 100).toFixed(0)}%</li><li>Holdings whose signal flips against them are exited; oversized winners are trimmed.</li></ul>
@@ -121,7 +122,34 @@
     };
   }
 
-  try { q.get("plan") ? await planReport() : await stockReport(q.get("symbol") || "AAPL"); }
+  async function scenarioReport() {
+    let w; try { w = JSON.parse(localStorage.getItem("ts-scenario")); } catch {}
+    if (!w) { $("#page").innerHTML = "<p>Run a scenario in the What-If Lab first.</p>"; return; }
+    const s = w.spec, st = await api("/api/state"), ccy = st.profile.currency;
+    document.title = `What-if: ${s.title} · TradeScope`;
+    const win = w.rows.filter((r) => r.score > 0).slice(0, 15), lose = w.rows.filter((r) => r.score < 0).sort((a, b) => a.score - b.score).slice(0, 10);
+    const tbl = (rs) => `<table><tr><th>Stock</th><th>Market / sector</th><th class="r">Projected</th><th class="r">Score</th><th class="r">Suggested</th><th>Main drivers</th></tr>${rs.map((r) => `<tr>
+      <td><b>${esc(disp(r.symbol))}</b><div class="muted" style="font-size:11.5px">${esc(r.name)}</div></td><td class="muted">${esc(r.marketName)}<br>${esc(r.sector || "")}</td>
+      <td class="r num ${r.expected >= 0 ? "up" : "down"}">${pct(r.expected * 100, 1)}</td><td class="r num">${r.score > 0 ? "+" : ""}${r.score.toFixed(0)}</td>
+      <td class="r num">${r.sizing.qty ? `${r.bias === "short" ? "Short" : "Buy"} ${r.sizing.qty}<br><span class="muted">${money(r.sizing.cost, ccy)}</span>` : "–"}</td>
+      <td class="muted" style="font-size:11.5px">${r.drivers.slice(0, 3).map((d) => `${esc(d.label)} (${(d.contrib * 100).toFixed(1)}%)`).join("<br>")}</td></tr>`).join("")}</table>`;
+    $("#page").innerHTML = `<div class="hdr"><div><div class="muted" style="font-size:11px;letter-spacing:1px">TRADESCOPE WHAT-IF SCENARIO REPORT</div><h1>${esc(s.title)}</h1>
+        <div class="muted">"${esc(s.text || s.title)}" · ${esc(w.markets.join(", "))} · ${now}</div></div></div>
+      <p>${esc(s.summary)} <span class="muted">(${esc(s.source || "")})</span></p>
+      <h2>Assumed market moves</h2><div class="grid">${Object.entries(w.levels).map(([k, d]) => `<div><label>${esc(d.label)}</label><b class="${(s.moves[k] || 0) > 0 ? "up" : (s.moves[k] || 0) < 0 ? "down" : ""}">${(s.moves[k] || 0) > 0 ? "+" : ""}${s.moves[k] || 0}${d.unit === "pp" ? " pp" : "%"}</b></div>`).join("")}</div>
+      ${Object.keys(s.sectors).length || s.themes.length ? `<p class="muted">Sector views: ${Object.entries(s.sectors).map(([k, v]) => `${esc(k)} ${v > 0 ? "▲" : "▼"}`).join(", ") || "none"} · Themes: ${s.themes.map((t) => `${esc(t.keyword)} ${t.impact > 0 ? "▲" : "▼"}`).join(", ") || "none"}</p>` : ""}
+      <h2>Best positioned</h2>${tbl(win)}<h2>Most exposed</h2>${tbl(lose)}
+      <div id="ai" class="ai"></div>
+      <h2>Method</h2><p class="muted" style="font-size:12px">Each stock's weekly returns over two years are regressed (ridge) on ten drivers: S&P 500, oil, gold, US 10Y yield, dollar, VIX, copper, Bitcoin, China stocks and natural gas. Projected move = Σ sensitivity × assumed driver move, plus sector, theme and country views, blended 75/25 with the stock's current technical score. Estimates are directional and approximate.</p>
+      <div class="disc">Research tool only. Scenarios are hypothetical; TradeScope never places trades. Not financial advice.</div>`;
+    $("#aiBtn").onclick = async () => {
+      $("#ai").innerHTML = "<h2 style='border-bottom:2px solid var(--ink);color:var(--ink);text-transform:uppercase;font-size:15px;letter-spacing:.8px'>AI scenario briefing</h2><div id='aiT' class='cursor'></div>";
+      await TS.stream("/api/ai/scenario", { spec: s, rows: w.rows.slice(0, 20).concat(w.rows.slice(-12)), markets: w.markets }, (t) => ($("#aiT").innerHTML = TS.md(t)));
+      $("#aiT").classList.remove("cursor");
+    };
+  }
+
+  try { q.get("scenario") ? await scenarioReport() : q.get("plan") ? await planReport() : await stockReport(q.get("symbol") || "AAPL"); }
   catch (e) { $("#page").innerHTML = `<p>Report failed: ${esc(e.message)}</p>`; }
 })();
 </script>

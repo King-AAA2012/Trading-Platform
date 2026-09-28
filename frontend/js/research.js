@@ -94,7 +94,7 @@
     cMain.applyOptions({ timeScale: { timeVisible: true } });
     cMain.timeScale().fitContent();
   }
-  function draw() { if (!A) return; (tf === "1D" || tf === "5D") && !sym.startsWith("SIM:") && !sym.startsWith("CUS:") ? drawIntraday() : drawDaily(); }
+  function draw() { if (!A) return; tf === "1D" || tf === "5D" ? drawIntraday() : drawDaily(); }
   function setTf() { document.querySelectorAll("#tf button").forEach((b) => b.classList.toggle("on", b.dataset.tf === tf)); }
   document.querySelectorAll("#tf button").forEach((b) => (b.onclick = () => { tf = b.dataset.tf; setTf(); draw(); }));
   ["#oEma", "#oBb", "#oSig", "#oLv"].forEach((s) => ($(s).onchange = draw));

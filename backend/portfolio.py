@@ -51,12 +51,11 @@ def size(a: dict, profile: dict, cash: float | None = None, fractional: bool | N
     return out
 
 
-def build_plan(candidates: list[dict], holdings: list[dict], held_analyses: dict[str, dict], profile: dict,
-               shortable: bool) -> dict:
+def build_plan(candidates: list[dict], holdings: list[dict], held_analyses: dict[str, dict], profile: dict) -> dict:
     cfg = RISK.get(profile.get("risk"), RISK["balanced"])
     budget = float(profile.get("budget") or 0)
     ccy = profile.get("currency", "USD")
-    allow_short = bool(profile.get("allowShorts")) and shortable
+    allow_short = bool(profile.get("allowShorts"))
     actions, alloc = [], []
     sector_val: dict[str, float] = {}
 
@@ -129,7 +128,8 @@ def build_plan(candidates: list[dict], holdings: list[dict], held_analyses: dict
     held = {h["symbol"] for h in holdings}
     daily_left = float(profile.get("dailyLimit") or 1e18)
     slots = cfg["maxn"] - kept
-    ideas = [c for c in candidates if c["symbol"] not in held and (c["bias"] == "long" or (allow_short and c["bias"] == "short"))]
+    ideas = [c for c in candidates if c["symbol"] not in held
+             and (c["bias"] == "long" or (allow_short and c["bias"] == "short" and c.get("shortable", True)))]
     ideas.sort(key=lambda c: abs(c["score"]) * c["confidence"], reverse=True)
     watch = []
     for c in ideas:
@@ -141,12 +141,15 @@ def build_plan(candidates: list[dict], holdings: list[dict], held_analyses: dict
         if room_sector <= equity * 0.02:
             watch.append(c)
             continue
-        s = size(c, {**profile, "budget": equity}, cash=min(cash, daily_left, room_sector))
-        if s["qty"] <= 0:
+        s = size(c, {**profile, "budget": equity}, cash=min(cash, daily_left, room_sector),
+                 fractional=bool(profile.get("fractional") or c.get("fractional")))
+        full = size(c, {**profile, "budget": equity}, fractional=bool(profile.get("fractional") or c.get("fractional")))
+        if s["qty"] <= 0 or s["cost"] < 0.25 * full["cost"]:   # don't open token-sized positions with leftover cash
             watch.append(c)
             continue
-        act = "BUY" if c["bias"] == "long" else "SHORT"
+        act ="BUY" if c["bias"] == "long" else "SHORT"
         actions.append({"action": act, "symbol": c["symbol"], "name": c["name"], "qty": s["qty"], "value": s["cost"],
+                        "market": c.get("marketName"), "expected": c.get("expected"),
                         "price": c["price"], "currency": c["currency"], "score": c["score"], "signal": c["signal"],
                         "confidence": c["confidence"], "stop": c["levels"]["stop"], "target": c["levels"]["t1"],
                         "target2": c["levels"]["t2"], "setup": c["setup"], "risk": s["riskAmount"], "sector": sec,
@@ -155,7 +158,8 @@ def build_plan(candidates: list[dict], holdings: list[dict], held_analyses: dict
         daily_left -= s["cost"]
         slots -= 1
         sector_val[sec] = sector_val.get(sec, 0) + s["cost"]
-        alloc.append({"symbol": c["symbol"], "name": c["name"], "value": s["cost"], "sector": sec, "side": "short" if act == "SHORT" else "long"})
+        alloc.append({"symbol": c["symbol"], "name": c["name"], "value": s["cost"], "sector": sec, "market": c.get("marketName"),
+                      "side": "short" if act == "SHORT" else "long"})
 
     order = {"SELL": 0, "COVER": 0, "TRIM": 1, "BUY": 2, "SHORT": 2, "ADD": 3, "HOLD": 4, "REVIEW": 5}
     actions.sort(key=lambda x: (order.get(x["action"], 9), -abs(x.get("score") or 0)))
@@ -165,7 +169,16 @@ def build_plan(candidates: list[dict], holdings: list[dict], held_analyses: dict
         "invested": invested, "positions": len(alloc), "actions": actions,
         "allocation": sorted(alloc, key=lambda x: -x["value"]) + ([{"symbol": "CASH", "name": "Cash", "value": max(cash, 0), "sector": "Cash"}] if cash > 0 else []),
         "sectors": sorted(({"sector": k, "value": v} for k, v in sector_val.items()), key=lambda x: -x["value"]),
+        "byMarket": sorted(({"market": k, "value": v} for k, v in _group(alloc, "market").items()), key=lambda x: -x["value"]),
         "totalRisk": sum(x.get("risk", 0) for x in actions if x["action"] in ("BUY", "SHORT")),
         "watchlist": [{"symbol": c["symbol"], "name": c["name"], "score": c["score"], "signal": c["signal"], "confidence": c["confidence"]} for c in watch[:8]],
         "rules": {"riskPerTrade": cfg["risk"], "maxPosition": cfg["maxpos"], "maxPositions": cfg["maxn"], "sectorCap": cfg["sector"]},
     }
+
+
+def _group(alloc: list[dict], key: str) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for a in alloc:
+        k = a.get(key) or "Holdings"
+        out[k] = out.get(k, 0) + a["value"]
+    return out

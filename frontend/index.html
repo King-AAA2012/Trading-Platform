@@ -10,7 +10,20 @@
   .grid.cmd { grid-template-columns: 330px minmax(560px, 1fr) 430px; }
   .pulse { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   .gauge { height: 8px; border-radius: 5px; overflow: hidden; display: flex; margin: 6px 0 2px; }
-  .simbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: linear-gradient(90deg, rgba(155,123,255,.08), transparent); }
+  .mkpop { position: fixed; z-index: 90; width: 560px; max-height: 70vh; overflow: auto; background: var(--panel2); border: 1px solid var(--line2); border-radius: 12px; padding: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.6); display: none; }
+  .mkpop.show { display: block; }
+  .mkpop h5 { margin: 10px 0 4px; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  .mkpop .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 10px; }
+  .mkpop label { display: flex; gap: 6px; align-items: center; font-size: 12px; padding: 2px 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wi textarea { resize: vertical; min-height: 64px; font-size: 13.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { background: var(--panel2); border: 1px solid var(--line2); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; cursor: pointer; color: var(--muted); }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .drv { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .drv .field input { padding: 4px 6px; }
+  .wi-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .wi-cols > div { min-width: 0; overflow-x: auto; }
+  .wi h4 { margin: 12px 0 6px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
   #donut { display: flex; gap: 14px; align-items: center; }
   #donut .lg { flex: 1; font-size: 11.5px; max-height: 150px; overflow: auto; }
   #donut .lg div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
@@ -61,19 +74,14 @@
     <!-- CENTER -->
     <section class="panel">
       <div class="ph">
-        <div class="tabs" id="tabs"><button data-t="long" class="on">Top Buys</button><button data-t="short">Shorts / Avoid</button><button data-t="all">All</button></div>
+        <div class="tabs" id="tabs"><button data-t="long" class="on">Top Buys</button><button data-t="short">Shorts / Avoid</button><button data-t="all">All</button><button data-t="whatif">🔮 What-If Lab</button></div>
         <span class="sub" id="scanInfo"></span><span class="spacer"></span>
         <input id="filter" class="in" placeholder="Filter…" style="width:150px;padding:4px 8px">
-        <button class="btn sm" id="customBtn" style="display:none">⚙ Manage market</button>
         <button class="btn sm" id="refresh">↻ Rescan</button>
       </div>
-      <div class="simbar" id="simbar" style="display:none">
-        <b>🐺 Wolf Exchange</b><span class="muted" id="simInfo"></span><span class="spacer"></span>
-        <button class="btn sm" data-adv="1">Next day ▶</button><button class="btn sm" data-adv="5">+1 week ⏩</button>
-        <button class="btn sm" id="simAuto">Auto-play</button><button class="btn sm ghost" id="simReset">New market</button>
-      </div>
-      <div class="hint b-only" style="margin:8px 12px 0">Every row is scored from <b>-100</b> (strongly bearish) to <b>+100</b> (strongly bullish) by combining trend, momentum, relative strength, breakouts, RSI, MACD and volume. <b>Confidence</b> blends factor agreement with how often this signal was right on that instrument in the past. <b>Click a row</b> to open its full research on the other screen.</div>
-      <div class="pb" style="padding:0 0 4px">
+      <div class="hint b-only scan-only" style="margin:8px 12px 0">Every row is scored from <b>-100</b> (strongly bearish) to <b>+100</b> (strongly bullish) by combining trend, momentum, relative strength, breakouts, RSI, MACD and volume. <b>Confidence</b> blends factor agreement with how often this signal was right on that instrument in the past. <b>Click a row</b> to open its full research on the other screen.</div>
+      <div class="pb wi" id="whatif" style="display:none"></div>
+      <div class="pb scan-only" style="padding:0 0 4px">
         <table class="t"><thead><tr>
           <th data-k="symbol">Symbol</th><th data-k="price" class="r">Price</th><th data-k="changePct" class="r">Day</th>
           <th data-k="spark">60d</th><th data-k="score">Score</th><th data-k="signal">Signal</th><th data-k="setup">Setup</th>
@@ -104,6 +112,7 @@
       </section>
       <section class="panel" style="flex:1">
         <div class="ph">Today's Portfolio Plan <span class="spacer"></span>
+          <button class="btn sm" id="planMk" title="Which markets the portfolio, AI and reports draw from">🌍 <span></span></button>
           <button class="btn sm" id="holdBtn">My holdings (<span id="nHold">0</span>)</button>
           <button class="btn sm primary" id="planBtn">Build plan</button></div>
         <div class="pb" id="plan"><div class="empty">Set your budget, then press <b>Build plan</b>. You'll get exactly what to buy, sell or trim today, and how many units.</div></div>
@@ -120,28 +129,7 @@
   <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="holdAdd">＋ Add row</button><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="holdSave">Save</button></div>
 </div></div>
 
-<!-- custom market modal -->
-<div class="modal-bg" id="cusModal"><div class="modal">
-  <h3 id="cusTitle">Custom market</h3>
-  <div class="hint" style="margin-bottom:10px">Use this for contest markets (e.g. Wolves of Wall Street) or any prices not on public feeds. Add tickers and paste history as CSV (<code>date,close</code> or <code>date,open,high,low,close,volume</code>, or one price per line). You can also log today's price each day. The algorithm needs about 30 prices for a basic signal and 200+ for full strength.</div>
-  <div id="cusList"></div>
-  <div class="form" style="margin-top:12px">
-    <div class="field"><label>Ticker</label><input class="in" id="cTk" placeholder="e.g. WOLF"></div>
-    <div class="field"><label>Name / sector</label><div style="display:flex;gap:6px"><input class="in" id="cName" placeholder="Name"><input class="in" id="cSec" placeholder="Sector"></div></div>
-    <div class="field" style="grid-column:1/3"><label>Paste CSV history (optional)</label><textarea class="in mono" id="cCsv" rows="5" placeholder="2026-09-01,101.5&#10;2026-09-02,103.2&#10;…"></textarea></div>
-    <div class="field"><label>…or just today's price</label><input class="in num" id="cPx" type="number" step="any"></div>
-    <div class="field"><label>Date (optional)</label><input class="in" id="cDate" type="date"></div>
-  </div>
-  <div style="display:flex;gap:8px;margin-top:12px"><button class="btn ghost" id="cusDelete" style="color:var(--down)">Delete market</button><span class="spacer"></span><button class="btn" data-close>Close</button><button class="btn primary" id="cusSave">Save ticker</button></div>
-</div></div>
-
-<!-- new market modal -->
-<div class="modal-bg" id="newMktModal"><div class="modal" style="width:420px">
-  <h3>New custom market</h3>
-  <div class="field"><label>Name</label><input class="in" id="nmName" placeholder="Wolves of Wall Street 2026"></div>
-  <div class="field" style="margin-top:8px"><label>Currency</label><input class="in" id="nmCcy" value="USD"></div>
-  <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end"><button class="btn" data-close>Cancel</button><button class="btn primary" id="nmCreate">Create</button></div>
-</div></div>
+<div class="mkpop" id="mkpop"></div>
 
 <script src="/js/common.js"></script>
 <script src="/js/command.js"></script>

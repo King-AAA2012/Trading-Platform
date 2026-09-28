@@ -1,8 +1,9 @@
-"""Market data layer. Real markets come from Yahoo Finance's public JSON endpoints (global coverage: stocks,
-ETFs, indices, FX, crypto, futures). Symbols prefixed SIM: or CUS: are routed to the imaginary-market providers."""
+"""Market data layer: Yahoo Finance public JSON endpoints (global coverage: stocks, ETFs, indices, FX, crypto,
+futures, bonds) plus the Yahoo screener, which supplies the largest companies of any country on demand."""
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -23,6 +24,7 @@ DATA_DIR.mkdir(exist_ok=True)
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
 Q1 = "https://query1.finance.yahoo.com"
 
+SUBUNIT = {"GBp": ("GBP", 100.0), "GBX": ("GBP", 100.0), "ZAc": ("ZAR", 100.0), "ILA": ("ILS", 100.0)}
 _session = requests.Session()
 _session.headers["User-Agent"] = UA
 _crumb: str | None = None
@@ -101,11 +103,11 @@ def yahoo_history(symbol: str, rng: str = "2y", interval: str = "1d") -> dict | 
         keep = np.isfinite(c) & (c > 0)
         o = np.where(np.isfinite(o), o, c); h = np.where(np.isfinite(h), h, c); l = np.where(np.isfinite(l), l, c)
         m = res.get("meta", {})
-        div = 100.0 if m.get("currency") == "GBp" else 1.0      # LSE quotes in pence
+        ccy, div = SUBUNIT.get(m.get("currency"), (m.get("currency", ""), 1.0))   # pence / cents -> major unit
         return {
             "symbol": symbol, "t": t[keep], "o": (o * f / div)[keep], "h": (h * f / div)[keep], "l": (l * f / div)[keep],
             "c": (c * f / div)[keep], "v": np.nan_to_num(v[keep]),
-            "meta": {"name": m.get("longName") or m.get("shortName") or symbol, "currency": "GBP" if div == 100 else m.get("currency", ""),
+            "meta": {"name": m.get("longName") or m.get("shortName") or symbol, "currency": ccy,
                      "exchange": m.get("fullExchangeName") or m.get("exchangeName", ""), "type": m.get("instrumentType", ""),
                      "price": (m.get("regularMarketPrice") or float("nan")) / div,
                      "prevClose": (m.get("chartPreviousClose") or m.get("previousClose") or float("nan")) / div,
@@ -116,12 +118,6 @@ def yahoo_history(symbol: str, rng: str = "2y", interval: str = "1d") -> dict | 
 
 
 def get_history(symbol: str, rng: str = "2y", interval: str = "1d") -> dict | None:
-    if symbol.startswith("SIM:"):
-        from . import simulator
-        return simulator.history(symbol)
-    if symbol.startswith("CUS:"):
-        from . import custom
-        return custom.history(symbol)
     return yahoo_history(symbol, rng, interval)
 
 
@@ -135,21 +131,21 @@ def many_histories(symbols: list[str], rng: str = "2y") -> dict[str, dict]:
 
 # ---------------------------------------------------------------- quotes / fundamentals / search / news
 def quotes(symbols: list[str]) -> list[dict]:
-    real = [s for s in symbols if not s.startswith(("SIM:", "CUS:"))]
+    real = list(symbols)
     out: dict[str, dict] = {}
     if real:
         def load():
             j = _yget("/v7/finance/quote", {"symbols": ",".join(real)}, crumb=True)
             return (j or {}).get("quoteResponse", {}).get("result")
         for q in cached("q:" + ",".join(real), 30, load) or []:
-            div = 100.0 if q.get("currency") == "GBp" else 1.0
+            ccy, div = SUBUNIT.get(q.get("currency"), (q.get("currency", ""), 1.0))
             out[q["symbol"]] = {"symbol": q["symbol"], "name": q.get("shortName") or q.get("longName") or q["symbol"],
                                 "price": (q.get("regularMarketPrice") or 0) / div, "change": (q.get("regularMarketChange") or 0) / div,
-                                "changePct": q.get("regularMarketChangePercent") or 0, "currency": "GBP" if div == 100 else q.get("currency", ""),
+                                "changePct": q.get("regularMarketChangePercent") or 0, "currency": ccy,
                                 "marketState": q.get("marketState", ""), "volume": q.get("regularMarketVolume")}
     for s in symbols:  # fall back to chart data for anything the quote endpoint missed (and SIM/CUS)
         if s not in out:
-            h = get_history(s, "5d") if not s.startswith(("SIM:", "CUS:")) else get_history(s)
+            h = get_history(s, "5d")
             if h and len(h["c"]) >= 2:
                 p, pc = float(h["c"][-1]), float(h["c"][-2])
                 out[s] = {"symbol": s, "name": h["meta"]["name"], "price": p, "change": p - pc, "changePct": (p / pc - 1) * 100,
@@ -165,9 +161,6 @@ def _raw(d: dict, k: str):
 
 
 def fundamentals(symbol: str) -> dict:
-    if symbol.startswith(("SIM:", "CUS:")):
-        return {}
-
     def load():
         mods = "price,summaryDetail,defaultKeyStatistics,financialData,assetProfile,recommendationTrend,calendarEvents"
         j = _yget(f"/v10/finance/quoteSummary/{urlquote(symbol, safe='')}", {"modules": mods}, crumb=True)
@@ -208,23 +201,93 @@ except Exception:
     _meta = {}
 
 
-def sector_of(symbol: str) -> str:
-    """Sector lookup cached on disk forever (sectors rarely change)."""
-    if symbol.startswith("SIM:"):
-        from . import simulator
-        return simulator.sector(symbol)
-    if symbol.startswith("CUS:"):
-        from . import custom
-        return custom.sector(symbol)
-    if symbol in _meta:
-        return _meta[symbol]
+def info_of(symbol: str) -> dict:
+    """Sector / industry / country, cached on disk forever (they rarely change)."""
+    m = _meta.get(symbol)
+    if isinstance(m, dict):
+        return m
     f = fundamentals(symbol)
+    typ = (get_history(symbol) or {}).get("meta", {}).get("type", "")
     sec = f.get("sector") or {"CRYPTOCURRENCY": "Crypto", "CURRENCY": "FX", "FUTURE": "Commodities", "ETF": "ETF",
-                              "INDEX": "Index"}.get((get_history(symbol) or {}).get("meta", {}).get("type", ""), "Other")
+                              "INDEX": "Index", "MUTUALFUND": "Fund"}.get(typ, "Other")
+    info = {"sector": sec, "industry": f.get("industry") or sec, "country": f.get("country") or ""}
     with _meta_lock:
-        _meta[symbol] = sec
+        _meta[symbol] = info
         _meta_path.write_text(json.dumps(_meta), "utf-8")
-    return sec
+    return info
+
+
+def sector_of(symbol: str) -> str:
+    return info_of(symbol)["sector"]
+
+
+_uni_path = DATA_DIR / "universe_cache.json"
+try:
+    _uni: dict = json.loads(_uni_path.read_text("utf-8"))
+except Exception:
+    _uni = {}
+
+
+def screener(region: str, size: int = 60, suffixes: tuple = (), fin_ccy: tuple = (), home_ccy: str | None = None) -> list[dict]:
+    """Largest DOMESTIC equities of a country by market cap (cached 24h). Cross-listings of foreign companies are
+    removed by requiring the home-exchange suffix, the home trading currency and a local (or allowed) reporting currency."""
+    hit = _uni.get(region)
+    if hit and time.time() - hit["ts"] < 86400 and hit["rows"]:
+        return hit["rows"]
+    cands = []
+    for page in range(4):
+        body = {"size": 250, "offset": page * 250, "sortField": "intradaymarketcap", "sortType": "DESC", "quoteType": "EQUITY",
+                "query": {"operator": "AND", "operands": [{"operator": "eq", "operands": ["region", region]}]}}
+        qs = None
+        for attempt in range(2):
+            try:
+                r = _session.post(f"{Q1}/v1/finance/screener", params={"crumb": _get_crumb(force=attempt > 0), "lang": "en-US", "region": "US"},
+                                  json=body, timeout=25)
+                if r.status_code == 200:
+                    qs = r.json()["finance"]["result"][0]["quotes"]
+                    break
+            except Exception:
+                time.sleep(1)
+        if not qs:
+            break
+        for q in qs:
+            sym = q["symbol"]
+            if suffixes and not any((x and sym.endswith(x)) or (not x and "." not in sym) for x in suffixes):
+                continue
+            fc = q.get("financialCurrency")
+            if fin_ccy and fc and fc not in fin_ccy and fc != q.get("currency"):
+                continue
+            cands.append(q)
+        if len(cands) >= size * 1.3 or len(qs) < 250:
+            break
+    if cands:  # home trading currency = the most common one among home-exchange listings (or an explicit override)
+        ccys = [q.get("currency") for q in cands]
+        home = home_ccy or max(set(ccys), key=ccys.count)
+        cands = [q for q in cands if q.get("currency") == home and "CDR" not in (q.get("longName") or q.get("shortName") or "")]
+
+        # A cross-listing trades a sliver of the company's value per day; a home listing trades far more.
+        def turnover(q):
+            v, px, mc = q.get("averageDailyVolume3Month"), q.get("regularMarketPrice"), q.get("marketCap")
+            return v * px / mc if v and px and mc else None
+        for thr in (1e-4, 2e-5):
+            keep = [q for q in cands if (turnover(q) or 0) >= thr or (thr < 1e-4 and turnover(q) is None)]
+            if len(keep) >= min(20, len(cands)):
+                cands = keep
+                break
+    rows, seen = [], set()
+    for q in cands:
+        nm = q.get("longName") or q.get("shortName") or q["symbol"]
+        key = re.sub(r"[^a-z0-9]", "", nm.split("(")[0].lower())[:14]          # drop duplicate share classes
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append({"symbol": q["symbol"].replace("-R.BK", ".BK"), "name": nm, "currency": SUBUNIT.get(q.get("currency"), (q.get("currency"), 1))[0]})
+        if len(rows) >= size:
+            break
+    if rows:
+        _uni[region] = {"ts": time.time(), "rows": rows}
+        _uni_path.write_text(json.dumps(_uni), "utf-8")
+    return rows or (hit or {}).get("rows", [])
 
 
 def search(q: str) -> list[dict]:
@@ -235,12 +298,6 @@ def search(q: str) -> list[dict]:
 
 
 def news(symbol: str, name: str = "") -> list[dict]:
-    if symbol.startswith("SIM:"):
-        from . import simulator
-        return simulator.news(symbol)
-    if symbol.startswith("CUS:"):
-        return []
-
     def load():
         items = []
         j = _yget("/v1/finance/search", {"q": symbol, "quotesCount": 0, "newsCount": 12})

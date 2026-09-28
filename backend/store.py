@@ -1,4 +1,4 @@
-"""Tiny JSON persistence for the user's profile, holdings, watchlist and custom markets (data/state.json)."""
+"""Tiny JSON persistence for the user's profile, holdings, watchlist and portfolio markets (data/state.json)."""
 import json
 import threading
 
@@ -11,8 +11,8 @@ DEFAULT = {
                 "dailyLimit": 2500, "cash": None, "experience": "beginner"},
     "holdings": [],       # {symbol, qty, avgCost, side: long|short}
     "watchlist": ["AAPL", "NVDA", "MSFT", "RELIANCE.NS", "BTC-USD", "GC=F"],
-    "customMarkets": {},
     "lastMarket": "us",
+    "planMarkets": ["us"],
 }
 
 

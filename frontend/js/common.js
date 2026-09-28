@@ -45,7 +45,7 @@ const TS = (() => {
     return a >= 1e12 ? (x / 1e12).toFixed(2) + "T" : a >= 1e9 ? (x / 1e9).toFixed(2) + "B" : a >= 1e6 ? (x / 1e6).toFixed(1) + "M" : a >= 1e3 ? (x / 1e3).toFixed(1) + "K" : x.toFixed(0);
   };
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const disp = (sym) => (sym || "").replace(/^SIM:/, "").replace(/^CUS:[^:]+:/, "");
+  const disp = (sym) => sym || "";
   const sigClass = (s) => (s || "").replace(" ", "-");
 
   function scoreBar(s) {

@@ -62,7 +62,7 @@ def true_range(h, l, c):
 
 def atr(h, l, c, n: int = 14) -> np.ndarray:
     tr = true_range(h, l, c)
-    # custom markets may only have closes (h == l == c); fall back to close-to-close moves
+    # some feeds (e.g. FX, thin markets) may only have closes (h == l == c); fall back to close-to-close moves
     tr = np.where(tr <= 0, np.abs(np.diff(c, prepend=c[0])), tr)
     return np.maximum(wilder(tr, n), c * 1e-4)
 

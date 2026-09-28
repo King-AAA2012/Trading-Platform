@@ -1,8 +1,9 @@
 # TradeScope: dual-monitor market research platform
 
-A free, local research terminal for beginners and pros. It scans any market, rates every instrument with its own
-multi-factor algorithm, tells you **what to buy, short or avoid, and exactly how much** for your budget, builds a
-**daily portfolio plan**, and explains everything with a **local AI** that never sends your data anywhere.
+A free, local research terminal for beginners and pros. It scans **every major stock market in the world** plus crypto,
+FX, commodities, bonds and ETFs, rates every instrument with its own multi-factor algorithm, tells you **what to buy,
+short or avoid, and exactly how much** for your budget, builds a **multi-market daily portfolio plan**, answers
+**"what if…?" scenarios**, and explains everything with a **local AI** that never sends your data anywhere.
 
 > **Research only.** TradeScope has no broker connection and cannot place trades. Nothing here is financial advice.
 
@@ -31,12 +32,34 @@ Clicking anything on the Command screen instantly loads it on the Research scree
 
 ## Markets
 
-- **Real:** US, India NSE, UK, Europe, Japan, Hong Kong, Canada, Australia, Crypto, Forex, Commodities, Global ETFs.
-  Plus *any* Yahoo Finance symbol via search (`/` to focus).
-- **🐺 Wolf Exchange (imaginary):** 24 fictional companies driven by a market/sector factor model with bull/bear regimes
-  and news shocks. Step day by day or auto-play; the engine never sees future bars. Great for practice.
-- **🧪 Custom / contest markets** (e.g. *Wolves of Wall Street*): create a market, add tickers, paste CSV history
-  (`date,close` or `date,open,high,low,close,volume` or one price per line) or log each day's price.
+- **44 country stock markets**, from the United States, Canada, Brazil and Mexico to the UK and all major European
+  exchanges, Japan, China, Hong Kong, India, Korea, Taiwan, Australia, Southeast Asia, Israel, Saudi Arabia, Qatar and
+  South Africa. Each country's largest *domestic* companies are pulled live from the Yahoo screener, refreshed daily.
+  Foreign cross-listings are filtered out by home exchange, trading currency, reporting currency and turnover.
+  Germany and Austria use the DAX 40 and ATX members.
+- **Curated sets:** US large caps, Nifty 50, FTSE, Euro Stoxx, Nikkei, Hang Seng, TSX, ASX.
+- **Asset classes:** World indices, Bonds & rates, Crypto, Forex, Commodities, Global ETFs.
+- Plus *any* Yahoo Finance symbol via search (`/` to focus).
+- Countries without a reliable index feed get a synthetic equal-weight benchmark for relative strength.
+
+## Portfolio markets (multi-market)
+
+Click **🌍** in the plan panel (or the What-If Lab) to choose which markets the portfolio draws from. Quick sets
+include Majors, Europe, Asia, Emerging and Multi-asset (up to 12 markets). The **daily plan, What-If Lab, AI
+explanations and reports** all use this selection. Positions are sized in your currency with live FX, and the plan
+shows the split by market.
+
+## What-If Lab 🔮
+
+Type any event ("China invades Taiwan", "Fed cuts 1%", "oil hits $150", "AI boom doubles data-center capex"):
+
+1. The **local AI** turns it into assumed moves in ten macro drivers (S&P 500, oil, gold, US 10Y yield, dollar,
+   VIX, copper, Bitcoin, China stocks, natural gas), plus sector, industry-theme and country views. A keyword
+   rulebook handles it if the AI is offline. **You can edit every assumed move and re-run.**
+2. Each stock's **sensitivity** to those drivers is estimated with a ridge regression on two years of weekly returns.
+3. Projected move = Σ sensitivity × driver move + sector/theme/country views, blended 75/25 with the current technical
+   score. You get ranked **best-positioned** and **most-exposed** stocks with their drivers, suggested sizes, a
+   **"Build my plan for this scenario"** button, an **AI scenario briefing** and a printable **scenario report**.
 
 ## The algorithm (`backend/engine.py`)
 
@@ -83,7 +106,7 @@ certificate store (`truststore`) so antivirus HTTPS scanning doesn't break reque
 
 ```
 backend/   app.py (API) · engine.py (algorithm) · portfolio.py (sizing/plan) · data.py (market data)
-           markets.py (presets) · simulator.py (Wolf Exchange) · custom.py (contest markets) · ai.py (Ollama) · store.py
-frontend/  index.html (Command) · research.html (Research) · report.html (printable) · js/ · css/
+           markets.py (44 countries + presets) · scenario.py (what-if engine) · ai.py (Ollama) · store.py
+frontend/  index.html (Command + What-If Lab) · research.html (Research) · report.html (stock / plan / scenario reports)
 data/      local state & caches (git-ignored)
 ```
