@@ -12,10 +12,10 @@
   .quote h1 { font-size: 18px; margin: 0; white-space: nowrap; }
   .quote .nm { color: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .quote .px { font-family: var(--mono); font-size: 20px; font-weight: 600; }
-  .charts { display: grid; grid-template-rows: 1fr 90px 90px 90px; gap: 1px; background: var(--line); flex: 1; min-height: 0; }
+  .charts { display: grid; grid-template-rows: 1fr 80px 80px 80px 90px; gap: 1px; background: var(--line); flex: 1; min-height: 0; }
   .charts > div { background: var(--panel); position: relative; min-height: 0; }
   .charts .lbl { position: absolute; left: 8px; top: 4px; z-index: 3; font-size: 10.5px; color: var(--muted); pointer-events: none; }
-  body:not(.pro) .charts { grid-template-rows: 1fr 120px; }
+  body:not(.pro) .charts { grid-template-rows: 1fr 80px 110px; }
   body:not(.pro) .charts .rsi, body:not(.pro) .charts .macd { display: none; }
   .legend { position: absolute; left: 10px; top: 8px; z-index: 3; font-size: 11.5px; font-family: var(--mono); pointer-events: none; display: flex; gap: 12px; flex-wrap: wrap; }
   .rec { border-radius: 12px; padding: 14px; background: linear-gradient(160deg, #121a2b, #0e1320); border: 1px solid var(--line2); }
@@ -56,11 +56,13 @@
         <label class="check"><input type="checkbox" id="oBb"> Bollinger</label>
         <label class="check"><input type="checkbox" id="oSig" checked> Signals</label>
         <label class="check"><input type="checkbox" id="oLv" checked> Trade levels</label>
+        <label class="check" title="Chandelier exit: 22-day high minus 3×ATR (or low plus 3×ATR for shorts)"><input type="checkbox" id="oAtr" checked> ATR trailing stop</label>
       </div>
       <div class="charts">
         <div id="cMain"><div class="legend" id="legend"></div></div>
         <div id="cRsi" class="rsi"><span class="lbl">RSI 14</span></div>
         <div id="cMacd" class="macd"><span class="lbl">MACD 12/26/9</span></div>
+        <div id="cAtr"><span class="lbl">ATR 14: average daily price range</span></div>
         <div id="cScore"><span class="lbl">TradeScope Score (−100 … +100). Green = buy zone, red = sell zone</span></div>
       </div>
     </section>

@@ -73,7 +73,9 @@
       <h2>Trade plan</h2>
       <div class="grid"><div><label>Entry zone</label><b>${price(L.entryLow)} – ${price(L.entryHigh)}</b></div><div><label>Stop-loss</label><b class="down">${price(L.stop)}</b></div>
         <div><label>Target 1</label><b class="up">${price(L.t1)}</b></div><div><label>Target 2</label><b class="up">${price(L.t2)}</b></div>
-        <div><label>Risk per unit</label><b>${(L.riskPct * 100).toFixed(1)}%</b></div><div><label>Support</label><b>${price(L.support)}</b></div><div><label>Resistance</label><b>${price(L.resistance)}</b></div><div><label>Holding period</label><b>2–8 weeks</b></div></div>
+        <div><label>Risk per unit</label><b>${(L.riskPct * 100).toFixed(1)}%</b></div><div><label>Support</label><b>${price(L.support)}</b></div><div><label>Resistance</label><b>${price(L.resistance)}</b></div><div><label>Holding period</label><b>2–8 weeks</b></div>
+        <div><label>ATR (14)</label><b>${price(A.atr)}</b></div><div><label>ATR % of price</label><b>${(A.atrPct * 100).toFixed(2)}%</b></div>
+        <div><label>ATR trailing stop</label><b>${price(L.atrStop)}</b></div><div><label>Stop distance</label><b>${(Math.abs(L.entry - L.stop) / A.atr).toFixed(1)} × ATR</b></div></div>
       <div style="margin-top:14px">${chartSVG(A.series, L, A.bias)}</div>
       <h2>Why</h2><ul>${A.reasons.map((r) => `<li><span class="${r.tone === "bull" ? "up" : r.tone === "bear" ? "down" : ""}">${r.tone === "bull" ? "▲" : r.tone === "bear" ? "▼" : "•"}</span> ${esc(r.text)} <span class="muted mono" style="font-size:11px">[${esc(r.pro)}]</span></li>`).join("")}</ul>
       <h2>Factor scores</h2><table><tr><th>Factor</th><th>What it measures</th><th class="r">Weight</th><th class="r">Reading</th></tr>

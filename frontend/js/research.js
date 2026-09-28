@@ -32,8 +32,8 @@
     crosshair: { mode: 0 },
   };
   const mk = (id, extra = {}) => LW.createChart(document.getElementById(id), { ...base, ...extra, layout: { ...base.layout, attributionLogo: id === "cMain" } });
-  const cMain = mk("cMain"), cRsi = mk("cRsi", { timeScale: { visible: false } }), cMacd = mk("cMacd", { timeScale: { visible: false } }), cScore = mk("cScore");
-  const all = [cMain, cRsi, cMacd, cScore];
+  const cMain = mk("cMain"), cRsi = mk("cRsi", { timeScale: { visible: false } }), cMacd = mk("cMacd", { timeScale: { visible: false } }), cAtr = mk("cAtr", { timeScale: { visible: false } }), cScore = mk("cScore");
+  const all = [cMain, cRsi, cMacd, cAtr, cScore];
   const candle = cMain.addCandlestickSeries({ upColor: "#1fd286", downColor: "#ff5470", borderVisible: false, wickUpColor: "#1fd286", wickDownColor: "#ff5470" });
   const vol = cMain.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
   cMain.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
@@ -41,6 +41,8 @@
   const e20 = line(cMain, "#f5b942"), e50 = line(cMain, "#5b8cff"), e200 = line(cMain, "#c084fc", 2);
   const bbu = line(cMain, "rgba(135,145,166,.55)", 1, 2), bbl = line(cMain, "rgba(135,145,166,.55)", 1, 2);
   const rsiS = line(cRsi, "#9b7bff", 1.5);
+  const atrS = cAtr.addLineSeries({ color: "#38bdf8", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true });
+  const chand = line(cMain, "#38bdf8", 1.5, 1);
   rsiS.createPriceLine({ price: 70, color: "#ff547066", lineStyle: 2, axisLabelVisible: false });
   rsiS.createPriceLine({ price: 30, color: "#1fd28666", lineStyle: 2, axisLabelVisible: false });
   const mH = cMacd.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false }), mL = line(cMacd, "#5b8cff"), mS = line(cMacd, "#f5b942");
@@ -65,6 +67,8 @@
     e20.setData(ema ? S(t, s.e20) : []); e50.setData(ema ? S(t, s.e50) : []); e200.setData(ema ? S(t, s.e200) : []);
     bbu.setData(bb ? S(t, s.bbu) : []); bbl.setData(bb ? S(t, s.bbl) : []);
     rsiS.setData(S(t, s.rsi));
+    atrS.setData(S(t, s.atr));
+    chand.setData($("#oAtr").checked ? S(t, A.bias === "short" ? s.chandS : s.chandL).slice(22) : []);
     mH.setData(t.map((x, i) => ({ time: x, value: s.macdh[i], color: s.macdh[i] >= 0 ? "rgba(31,210,134,.6)" : "rgba(255,84,112,.6)" })));
     mL.setData(S(t, s.macd)); mS.setData(S(t, s.macds));
     scoreS.setData(S(t, s.score));
@@ -89,7 +93,7 @@
     if (!h || !h.t.length) { TS.toast("No intraday data for this instrument."); tf = "1Y"; setTf(); return drawDaily(); }
     candle.setData(h.t.map((x, i) => ({ time: x, open: h.o[i], high: h.h[i], low: h.l[i], close: h.c[i] })));
     vol.setData(h.t.map((x, i) => ({ time: x, value: h.v[i], color: h.c[i] >= h.o[i] ? "rgba(31,210,134,.28)" : "rgba(255,84,112,.28)" })));
-    [e20, e50, e200, bbu, bbl, rsiS, mL, mS, mH, scoreS].forEach((x) => x.setData([]));
+    [e20, e50, e200, bbu, bbl, rsiS, mL, mS, mH, scoreS, atrS, chand].forEach((x) => x.setData([]));
     candle.setMarkers([]);
     cMain.applyOptions({ timeScale: { timeVisible: true } });
     cMain.timeScale().fitContent();
@@ -97,7 +101,7 @@
   function draw() { if (!A) return; tf === "1D" || tf === "5D" ? drawIntraday() : drawDaily(); }
   function setTf() { document.querySelectorAll("#tf button").forEach((b) => b.classList.toggle("on", b.dataset.tf === tf)); }
   document.querySelectorAll("#tf button").forEach((b) => (b.onclick = () => { tf = b.dataset.tf; setTf(); draw(); }));
-  ["#oEma", "#oBb", "#oSig", "#oLv"].forEach((s) => ($(s).onchange = draw));
+  ["#oEma", "#oBb", "#oSig", "#oLv", "#oAtr"].forEach((s) => ($(s).onchange = draw));
 
   cMain.subscribeCrosshairMove((p) => {
     if (!A) return;
@@ -106,6 +110,7 @@
     const o = d || { open: s.o[i], high: s.h[i], low: s.l[i], close: s.c[i] };
     const ch = i > 0 && s.c[i - 1] ? (o.close / s.c[i - 1] - 1) * 100 : 0;
     $("#legend").innerHTML = `<span class="muted">O</span>${price(o.open)} <span class="muted">H</span>${price(o.high)} <span class="muted">L</span>${price(o.low)} <span class="muted">C</span>${price(o.close)} <span class="${cls(ch)}">${pct(ch)}</span>` +
+      (i >= 0 && s.atr[i] != null ? ` <span class="muted">ATR</span><span style="color:#38bdf8">${price(s.atr[i])} (${((s.atr[i] / o.close) * 100).toFixed(1)}%)</span>` : "") +
       (i >= 0 && s.score[i] != null ? ` <span class="muted">Score</span><span class="${cls(s.score[i])}">${s.score[i].toFixed(0)}</span>` : "") +
       ($("#oEma").checked ? ` <span style="color:#f5b942">EMA20</span> <span style="color:#5b8cff">EMA50</span> <span style="color:#c084fc">EMA200</span>` : "");
   });
@@ -154,7 +159,10 @@
         <span class="l">Stop-loss</span><span class="num down">${price(L.stop)}</span><span class="num down">${z.qty ? "−" + money(z.riskAmount, ccy) : pct(-L.riskPct * 100, 1)}</span>
         <span class="l">Target 1 (2R)</span><span class="num up">${price(L.t1)}</span><span class="num up">${z.qty ? "+" + money(z.gainT1, ccy) : ""}</span>
         <span class="l">Target 2 (3.5R)</span><span class="num up">${price(L.t2)}</span><span class="num up">${z.qty ? "+" + money(z.gainT2, ccy) : ""}</span>
+        <span class="l">ATR trailing stop</span><span class="num" style="color:#38bdf8">${price(L.atrStop)}</span><span class="dim">3×ATR</span>
       </div>` : `<div class="ladder"><span class="l">Support</span><span class="num">${price(L.support)}</span><span></span><span class="l">Resistance</span><span class="num">${price(L.resistance)}</span><span></span></div>`}
+      <div class="ladder" style="margin-top:6px"><span class="l">ATR (14)</span><span class="num" style="color:#38bdf8">${price(A.atr)} · ${(A.atrPct * 100).toFixed(2)}%/day</span><span class="dim">${A.atrPct > 0.04 ? "high volatility" : A.atrPct < 0.015 ? "calm" : "normal"}</span></div>
+      <div class="b-only dim" style="font-size:11.5px;margin-top:4px">ATR (Average True Range) is how much ${esc(disp(A.symbol))} typically moves in a day, about ${price(A.atr)}. The stop is placed about 2 ATR away so normal daily noise doesn't knock you out. As the price rises, the <span style="color:#38bdf8">ATR trailing stop</span> rises with it to lock in gains.</div>
       <div class="hint b-only" style="margin-top:10px">${A.bias === "long" ? `<b>How to use this:</b> buy near the entry zone. If the price closes below the <b>stop</b>, sell to cap your loss. Sell half at Target 1 and move your stop to your buy price, then let the rest run to Target 2.`
         : A.bias === "short" ? `<b>Shorting</b> profits when the price falls but has unlimited risk. It's for experienced traders only. Most beginners should simply <b>avoid buying</b> this right now.`
         : `<b>No edge right now.</b> The signals disagree. Keep it on your watchlist and check back; patience is a strategy.`}</div>

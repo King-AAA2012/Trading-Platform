@@ -298,6 +298,7 @@ def evaluate(b: dict, bench: dict | None = None, shortable: bool = True, fund: d
                   "t1": price + 2 * risk, "t2": price + 3.5 * risk}
     levels["support"], levels["resistance"] = swing_lo, swing_hi
     levels["rr"] = 2.0
+    levels["atrStop"] = float(np.max(b["h"][-22:]) - 3 * atr) if bias != "short" else float(np.min(b["l"][-22:]) + 3 * atr)
     levels["riskPct"] = abs(levels["entry"] - levels["stop"]) / price
 
     meta = b.get("meta", {})
@@ -337,7 +338,9 @@ def _series(b, fs, shortable):
     return {"t": b["t"].tolist(), "o": r(b["o"]), "h": r(b["h"]), "l": r(b["l"]), "c": r(b["c"]), "v": r(b["v"], 0),
             "e20": r(ind["e20"]), "e50": r(ind["e50"]), "e200": r(ind["e200"]), "bbu": r(ind["bbu"]), "bbl": r(ind["bbl"]),
             "rsi": r(ind["rsi"], 2), "macd": r(ind["macd"]), "macds": r(ind["macds"]), "macdh": r(ind["macdh"]),
-            "score": r(fs["score"], 1), "marks": marks}
+            "score": r(fs["score"], 1), "marks": marks, "atr": r(ind["atr"]),
+            # chandelier exit: 22-day extreme -/+ 3 ATR, a classic volatility trailing stop
+            "chandL": r(ta.rolling_max(b["h"], 22) - 3 * ind["atr"]), "chandS": r(ta.rolling_min(b["l"], 22) + 3 * ind["atr"])}
 
 
 def reasons(o, f, ind, i, has_rel, fparts) -> list[dict]:

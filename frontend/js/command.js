@@ -86,11 +86,11 @@
   // ---------------- scan
   async function loadScan(force = false) {
     const mk = state.lastMarket;
-    $("#rows").innerHTML = `<tr><td colspan="12" class="empty"><span class="spin"></span> Running the algorithm on ${esc(markets.find((m) => m.id === mk)?.name || mk)}…</td></tr>`;
+    $("#rows").innerHTML = `<tr><td colspan="13" class="empty"><span class="spin"></span> Running the algorithm on ${esc(markets.find((m) => m.id === mk)?.name || mk)}…</td></tr>`;
     try {
       scan = await api(`/api/scan/${mk}${force ? "?force=true" : ""}`);
     } catch (e) {
-      $("#rows").innerHTML = `<tr><td colspan="12" class="empty">Scan failed: ${esc(e.message)}</td></tr>`;
+      $("#rows").innerHTML = `<tr><td colspan="13" class="empty">Scan failed: ${esc(e.message)}</td></tr>`;
       return;
     }
     if (mk !== state.lastMarket) return;
@@ -161,10 +161,11 @@
       <td><span class="sig ${TS.sigClass(r.signal)}">${r.signal}</span></td>
       <td class="muted" style="font-size:12px">${esc(r.setup)}</td>
       <td>${TS.confRing(r.confidence)}</td>
+      <td class="r num" style="font-size:12px" title="Typical daily move: ${price(r.atr)} ${esc(r.currency)}"><span class="${r.atrPct > 0.04 ? "warn" : ""}">${(r.atrPct * 100).toFixed(1)}%</span><div class="dim" style="font-size:10px">${price(r.atr)}</div></td>
       <td class="r num" style="font-size:12px">${r.sizing.qty ? `<b>${r.bias === "short" ? "Short " : "Buy "}${r.sizing.qty}</b><div class="dim">≈ ${money(r.sizing.cost, ccy)}</div>` : '<span class="dim">–</span>'}</td>
       <td class="r num p-only ${cls(r.ret3m)}">${r.ret3m == null ? "–" : pct(r.ret3m * 100, 1)}</td>
       <td class="r num p-only">${r.rsi.toFixed(0)}</td>
-      <td class="r num p-only">${r.hitRate == null ? "–" : (r.hitRate * 100).toFixed(0) + "%"}</td></tr>`).join("") || `<tr><td colspan="12" class="empty">Nothing matches.</td></tr>`;
+      <td class="r num p-only">${r.hitRate == null ? "–" : (r.hitRate * 100).toFixed(0) + "%"}</td></tr>`).join("") || `<tr><td colspan="13" class="empty">Nothing matches.</td></tr>`;
     document.querySelectorAll("tr.row").forEach((tr) => (tr.onclick = () => select(tr.dataset.s)));
   }
 
