@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TradeScope Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #0f1522; --muted: #5d6679; --line: #e3e7ef; --up: #0a9a5c; --down: #d42b4a; --accent: #3f6dff; --bg: #f4f6fa; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13.5px/1.55 Inter, system-ui, sans-serif; }
+  .page { max-width: 960px; margin: 24px auto; background: #fff; border-radius: 14px; box-shadow: 0 10px 40px rgba(15,21,34,.08); padding: 36px 44px; }
+  .bar { max-width: 960px; margin: 16px auto 0; display: flex; gap: 8px; justify-content: flex-end; padding: 0 16px; }
+  .bar button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 7px 14px; cursor: pointer; font: inherit; }
+  .bar button.p { background: var(--accent); color: #fff; border-color: var(--accent); }
+  h1 { margin: 0; font-size: 26px; } h2 { font-size: 15px; margin: 26px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--ink); text-transform: uppercase; letter-spacing: .8px; }
+  .mono, .num { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); } .up { color: var(--up); } .down { color: var(--down); }
+  .hdr { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+  .verdict { display: flex; gap: 18px; align-items: center; background: linear-gradient(135deg, #f0f4ff, #f7f2ff); border-radius: 12px; padding: 16px 20px; margin-top: 18px; }
+  .verdict .big { font-size: 26px; font-weight: 800; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .grid div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .grid label { display: block; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .grid b { font-family: "JetBrains Mono", monospace; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; } th, td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; } td.r, th.r { text-align: right; }
+  ul { padding-left: 18px; } li { margin: 4px 0; }
+  .tag { display: inline-block; font-weight: 800; font-size: 11px; padding: 2px 8px; border-radius: 5px; letter-spacing: .5px; }
+  .BUY, .ADD { background: #e3f7ee; color: var(--up); } .SELL, .COVER { background: #fde8ec; color: var(--down); } .TRIM { background: #fff3dc; color: #b77900; }
+  .SHORT { background: #efeaff; color: #6a4be0; } .HOLD, .REVIEW { background: #eef0f4; color: var(--muted); }
+  .disc { font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 28px; padding-top: 12px; }
+  .ai h2 { border: 0; font-size: 14px; text-transform: none; letter-spacing: 0; margin: 14px 0 4px; color: var(--accent); }
+  .cursor::after { content: "▍"; color: var(--accent); }
+  @media print { body { background: #fff; } .page { box-shadow: none; margin: 0; max-width: none; padding: 0 8px; } .bar { display: none; } h2 { break-after: avoid; } }
+</style>
+</head>
+<body>
+<div class="bar"><button id="aiBtn">✨ Add AI narrative</button><button class="p" onclick="print()">🖨 Print / Save PDF</button></div>
+<div class="page" id="page"><p class="muted">Building report…</p></div>
+<script src="/js/common.js"></script>
+<script>
+(async () => {
+  const { api, esc, price, pct, money, big, disp } = TS;
+  const q = new URLSearchParams(location.search), $ = (s) => document.querySelector(s);
+  const P = (x) => (x == null ? "–" : pct(x * 100, 1));
+  const now = new Date().toLocaleString();
+
+  function chartSVG(s, L, bias) {
+    const n = Math.min(252, s.c.length), off = s.c.length - n, W = 870, H = 260, pad = 8;
+    const c = s.c.slice(off), e50 = s.e50.slice(off), e200 = s.e200.slice(off);
+    const lv = bias !== "neutral" ? [L.stop, L.t1, L.t2] : [];
+    const mn = Math.min(...c, ...e200, ...lv) * 0.98, mx = Math.max(...c, ...e200, ...lv) * 1.02;
+    const x = (i) => pad + (i / (n - 1)) * (W - 2 * pad), y = (v) => H - pad - ((v - mn) / (mx - mn)) * (H - 2 * pad);
+    const path = (a) => a.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+    const hl = (v, col, t) => `<line x1="${pad}" x2="${W - pad}" y1="${y(v)}" y2="${y(v)}" stroke="${col}" stroke-dasharray="5 4"/><text x="${W - pad - 4}" y="${y(v) - 4}" text-anchor="end" font-size="11" fill="${col}">${t} ${price(v)}</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%"><path d="${path(e200)}" fill="none" stroke="#a78bfa" stroke-width="1.5"/><path d="${path(e50)}" fill="none" stroke="#6b8cff" stroke-width="1.2"/>
+      <path d="${path(c)}" fill="none" stroke="#0f1522" stroke-width="1.8"/>${bias !== "neutral" ? hl(L.stop, "#d42b4a", "STOP") + hl(L.t1, "#0a9a5c", "T1") + hl(L.t2, "#0a9a5c", "T2") : ""}</svg>
+      <div class="muted" style="font-size:11px">1-year price (black) · EMA50 (blue) · EMA200 (purple)</div>`;
+  }
+
+  async function stockReport(sym) {
+    const [A, st] = await Promise.all([api(`/api/analyze/${encodeURIComponent(sym)}${q.get("market") ? "?market=" + q.get("market") : ""}`), api("/api/state")]);
+    const news = await api(`/api/news/${encodeURIComponent(sym)}?name=${encodeURIComponent(A.name)}`).catch(() => []);
+    const L = A.levels, z = A.sizing, ccy = st.profile.currency, f = A.fundamentals || {}, b = A.backtest || {};
+    document.title = `${disp(sym)} Research Report · TradeScope`;
+    const col = A.score >= 20 ? "var(--up)" : A.score <= -20 ? "var(--down)" : "var(--muted)";
+    $("#page").innerHTML = `
+      <div class="hdr"><div><div class="muted" style="font-size:11px;letter-spacing:1px">TRADESCOPE RESEARCH REPORT</div><h1>${esc(A.name)} <span class="muted">(${esc(disp(A.symbol))})</span></h1>
+        <div class="muted">${esc(A.exchange || A.marketName)} · ${esc(A.sector || "")} · ${now}</div></div>
+        <div style="text-align:right"><div class="num" style="font-size:26px;font-weight:600">${price(A.price)} <span style="font-size:13px" class="muted">${esc(A.currency)}</span></div><div class="num ${A.changePct >= 0 ? "up" : "down"}">${pct(A.changePct)} today</div></div></div>
+      <div class="verdict"><div class="big" style="color:${col}">${A.signal}</div><div><b>Score ${A.score > 0 ? "+" : ""}${A.score}</b> / 100 · confidence <b>${A.confidence.toFixed(0)}%</b> · setup <b>${esc(A.setup)}</b><br>
+        ${A.bias === "neutral" ? "No position recommended right now." : z.qty ? `Suggested: <b>${A.bias === "short" ? "short" : "buy"} ${z.qty} units ≈ ${money(z.cost, ccy)}</b> (${(z.pct * 100).toFixed(1)}% of a ${money(st.profile.budget, ccy)} budget, ${esc(st.profile.risk)} profile). Max loss at stop ≈ ${money(z.riskAmount, ccy)}.` : esc(z.note)}</div></div>
+      <h2>Trade plan</h2>
+      <div class="grid"><div><label>Entry zone</label><b>${price(L.entryLow)} – ${price(L.entryHigh)}</b></div><div><label>Stop-loss</label><b class="down">${price(L.stop)}</b></div>
+        <div><label>Target 1</label><b class="up">${price(L.t1)}</b></div><div><label>Target 2</label><b class="up">${price(L.t2)}</b></div>
+        <div><label>Risk per unit</label><b>${(L.riskPct * 100).toFixed(1)}%</b></div><div><label>Support</label><b>${price(L.support)}</b></div><div><label>Resistance</label><b>${price(L.resistance)}</b></div><div><label>Holding period</label><b>2–8 weeks</b></div></div>
+      <div style="margin-top:14px">${chartSVG(A.series, L, A.bias)}</div>
+      <h2>Why</h2><ul>${A.reasons.map((r) => `<li><span class="${r.tone === "bull" ? "up" : r.tone === "bear" ? "down" : ""}">${r.tone === "bull" ? "▲" : r.tone === "bear" ? "▼" : "•"}</span> ${esc(r.text)} <span class="muted mono" style="font-size:11px">[${esc(r.pro)}]</span></li>`).join("")}</ul>
+      <h2>Factor scores</h2><table><tr><th>Factor</th><th>What it measures</th><th class="r">Weight</th><th class="r">Reading</th></tr>
+        ${A.factors.map((x) => `<tr><td><b>${esc(x.label)}</b></td><td class="muted">${esc(x.explain)}</td><td class="r num">${(x.weight * 100).toFixed(0)}%</td><td class="r num ${x.value > 0 ? "up" : x.value < 0 ? "down" : ""}">${x.value > 0 ? "+" : ""}${x.value.toFixed(2)}</td></tr>`).join("")}</table>
+      ${Object.keys(f).length ? `<h2>Fundamentals</h2><div class="grid">${[["Market cap", big(f.marketCap)], ["P/E", f.trailingPE?.toFixed(1) ?? "–"], ["Fwd P/E", f.forwardPE?.toFixed(1) ?? "–"], ["Rev. growth", P(f.revenueGrowth)],
+        ["EPS growth", P(f.earningsGrowth)], ["Profit margin", P(f.profitMargin)], ["ROE", P(f.roe)], ["Debt/Equity", f.debtToEquity != null ? (f.debtToEquity / 100).toFixed(2) + "x" : "–"],
+        ["Div. yield", P(f.dividendYield)], ["Beta", f.beta?.toFixed(2) ?? "–"], ["Analyst target", f.targetMean ? price(f.targetMean) : "–"], ["Next earnings", f.nextEarnings || "–"]].map(([k, v]) => `<div><label>${k}</label><b>${v}</b></div>`).join("")}</div>
+        ${f.summary ? `<p class="muted" style="font-size:12.5px">${esc(f.summary)}</p>` : ""}` : ""}
+      ${b.ok ? `<h2>Backtest (${b.years} years, this instrument)</h2><div class="grid"><div><label>Model return</label><b>${P(b.strategy.total)}</b></div><div><label>Buy & hold</label><b>${P(b.buyhold.total)}</b></div>
+        <div><label>Max drawdown</label><b class="down">${P(b.strategy.maxdd)}</b></div><div><label>Win rate</label><b>${P(b.strategy.winrate)}</b></div>
+        <div><label>Trades</label><b>${b.strategy.trades}</b></div><div><label>Sharpe</label><b>${b.strategy.sharpe.toFixed(2)}</b></div><div><label>Buy-signal hit rate (10d)</label><b>${b.longs.n ? (b.longs.hit * 100).toFixed(0) + "%" : "–"}</b></div><div><label>Sell-signal hit rate (10d)</label><b>${b.shorts.n ? (b.shorts.hit * 100).toFixed(0) + "%" : "–"}</b></div></div>` : ""}
+      <h2>Risks</h2><ul>${A.risks.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
+      ${news.length ? `<h2>Recent headlines</h2><ul>${news.slice(0, 8).map((n) => `<li>${esc(n.title)} <span class="muted">(${esc(n.publisher || "")}${n.time ? ", " + new Date(n.time * 1000).toLocaleDateString() : ""})</span></li>`).join("")}</ul>` : ""}
+      <div id="ai" class="ai"></div>
+      <div class="disc">Generated by TradeScope, a research tool. It cannot place trades. Signals are statistical and can be wrong; past performance does not guarantee future results. This is not financial advice. Verify all prices with your broker before acting.</div>`;
+    $("#aiBtn").onclick = async () => {
+      const el = $("#ai"); el.innerHTML = "<h2 style='border-bottom:2px solid var(--ink);color:var(--ink);text-transform:uppercase;font-size:15px;letter-spacing:.8px'>AI analyst narrative</h2><div id='aiT' class='cursor'></div>";
+      await TS.stream("/api/ai/report", { symbol: sym, market: q.get("market") }, (t) => ($("#aiT").innerHTML = TS.md(t)));
+      $("#aiT").classList.remove("cursor");
+    };
+  }
+
+  async function planReport() {
+    let p; try { p = JSON.parse(localStorage.getItem("ts-plan")); } catch {}
+    if (!p) p = await api("/api/plan", { body: {} });
+    const c = p.currency;
+    document.title = `Daily Portfolio Plan · TradeScope`;
+    $("#page").innerHTML = `<div class="hdr"><div><div class="muted" style="font-size:11px;letter-spacing:1px">TRADESCOPE DAILY PORTFOLIO PLAN</div><h1>${esc(p.market)}</h1><div class="muted">${esc(p.profile)} profile · ${new Date(p.generated * 1000).toLocaleString()}</div></div>
+      <div style="text-align:right"><div class="muted">Equity</div><div class="num" style="font-size:24px;font-weight:600">${money(p.equity, c)}</div></div></div>
+      <div class="grid" style="margin-top:16px"><div><label>Cash before</label><b>${money(p.cashStart, c)}</b></div><div><label>Cash after</label><b>${money(p.cashEnd, c)}</b></div><div><label>Positions</label><b>${p.positions}</b></div><div><label>Risk at stops</label><b class="down">${money(p.totalRisk, c)}</b></div></div>
+      <h2>Today's actions</h2><table><tr><th>Action</th><th>Instrument</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Value (${esc(c)})</th><th class="r">Stop</th><th class="r">Target</th></tr>
+        ${p.actions.map((a) => `<tr><td><span class="tag ${a.action}">${a.action}</span></td><td><b>${esc(disp(a.symbol))}</b> <span class="muted">${esc(a.name || "")}</span><div class="muted" style="font-size:11.5px">${esc(a.reason)}</div></td>
+          <td class="r num">${a.qty ?? ""}</td><td class="r num">${price(a.price)}</td><td class="r num">${money(a.value, "")}</td><td class="r num down">${a.stop ? price(a.stop) : ""}</td><td class="r num up">${a.target ? price(a.target) : ""}</td></tr>`).join("")}</table>
+      <h2>Target allocation</h2><table><tr><th>Holding</th><th>Sector</th><th class="r">Value</th><th class="r">Weight</th></tr>
+        ${p.allocation.map((a) => `<tr><td><b>${esc(disp(a.symbol))}</b> <span class="muted">${esc(a.name)}</span></td><td>${esc(a.sector)}</td><td class="r num">${money(a.value, c)}</td><td class="r num">${((a.value / p.equity) * 100).toFixed(1)}%</td></tr>`).join("")}</table>
+      <h2>Rules applied</h2><ul><li>Risk per idea: ${(p.rules.riskPerTrade * 100).toFixed(1)}% of equity between entry and stop, scaled by confidence</li><li>Max position: ${(p.rules.maxPosition * 100).toFixed(0)}% · Max positions: ${p.rules.maxPositions} · Sector cap: ${(p.rules.sectorCap * 100).toFixed(0)}%</li><li>Holdings whose signal flips against them are exited; oversized winners are trimmed.</li></ul>
+      <div id="ai" class="ai"></div>
+      <div class="disc">Research tool only. TradeScope never places trades. Not financial advice.</div>`;
+    $("#aiBtn").onclick = async () => {
+      $("#ai").innerHTML = "<div id='aiT' class='cursor'></div>";
+      await TS.stream("/api/ai/plan", { plan: p }, (t) => ($("#aiT").innerHTML = TS.md(t)));
+      $("#aiT").classList.remove("cursor");
+    };
+  }
+
+  try { q.get("plan") ? await planReport() : await stockReport(q.get("symbol") || "AAPL"); }
+  catch (e) { $("#page").innerHTML = `<p>Report failed: ${esc(e.message)}</p>`; }
+})();
+</script>
+</body>
+</html>
