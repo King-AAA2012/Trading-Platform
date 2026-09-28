@@ -31,7 +31,16 @@
     timeScale: { borderColor: "#1d2533", rightOffset: 4 },
     crosshair: { mode: 0 },
   };
-  const mk = (id, extra = {}) => LW.createChart(document.getElementById(id), { ...base, ...extra, layout: { ...base.layout, attributionLogo: id === "cMain" } });
+  const mk = (id, extra = {}) => {
+    let el = document.getElementById(id);
+    if (!el) { // a stale/edited page without this pane must not crash the whole screen
+      el = document.createElement("div");
+      el.id = id;
+      el.style.display = "none";
+      document.body.appendChild(el);
+    }
+    return LW.createChart(el, { ...base, ...extra, layout: { ...base.layout, attributionLogo: id === "cMain" } });
+  };
   const cMain = mk("cMain"), cRsi = mk("cRsi", { timeScale: { visible: false } }), cMacd = mk("cMacd", { timeScale: { visible: false } }), cAtr = mk("cAtr", { timeScale: { visible: false } }), cScore = mk("cScore");
   const all = [cMain, cRsi, cMacd, cAtr, cScore];
   const candle = cMain.addCandlestickSeries({ upColor: "#1fd286", downColor: "#ff5470", borderVisible: false, wickUpColor: "#1fd286", wickDownColor: "#ff5470" });

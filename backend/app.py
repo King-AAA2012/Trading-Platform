@@ -19,6 +19,16 @@ app = FastAPI(title="TradeScope", version="2.0")
 _scan_cache: dict[str, tuple[float, list, dict]] = {}
 
 
+@app.middleware("http")
+async def no_stale_assets(request, call_next):
+    """Make the browser revalidate HTML/JS/CSS on every load (cheap 304s), so after an update it never mixes an old
+    cached page with a new script."""
+    resp = await call_next(request)
+    if not request.url.path.startswith(("/api/", "/vendor/")):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 def clean(o):
     """Make numpy / NaN values JSON-safe."""
     if isinstance(o, dict):
