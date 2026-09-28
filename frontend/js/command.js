@@ -248,6 +248,8 @@
       <div class="lg">${segs.map((s) => `<div><span><span class="sw" style="background:${s.col}"></span>${esc(disp(s.symbol))}</span><span class="num muted">${((s.value / tot) * 100).toFixed(1)}%</span></div>`).join("")}</div></div>`;
   }
   $("#planBtn").onclick = async () => {
+    $("#mkpop").classList.remove("show");
+    if (!(state.planMarkets || []).length) return TS.toast("Pick at least one market with 🌍 first");
     $("#plan").innerHTML = `<div class="empty"><span class="spin"></span> Building today's plan…</div>`;
     try { lastPlan = await api("/api/plan", { body: { markets: state.planMarkets, scenario: planScenario } }); }
     catch (e) { $("#plan").innerHTML = `<div class="empty">Plan failed: ${esc(e.message)}</div>`; return; }
@@ -304,20 +306,24 @@
     pop.style.top = Math.min(r.bottom + 6, innerHeight - 200) + "px";
     pop.style.left = Math.max(10, Math.min(r.left, innerWidth - 580)) + "px";
     pop.classList.add("show");
-    const count = () => { const n = pop.querySelectorAll("input:checked").length; $("#mkCount").textContent = `${n} selected` + (n > 12 ? " (only the first 12 are used)" : ""); };
-    count();
+    // every change is saved immediately, so closing the picker any way (Done, clicking away, Build plan) keeps it
+    let saveT;
+    const count = () => {
+      const picked = [...pop.querySelectorAll("input:checked")].map((i) => i.value);
+      $("#mkCount").textContent = `${picked.length} selected` + (picked.length > 12 ? " (only the first 12 are used)" : "");
+      state.planMarkets = picked;
+      mkLabel();
+      clearTimeout(saveT);
+      saveT = setTimeout(() => api("/api/state", { body: { planMarkets: picked } }), 250);
+    };
+    $("#mkCount").textContent = `${sel.size} selected`;
     pop.querySelectorAll("input").forEach((i) => (i.onchange = count));
     pop.querySelectorAll("[data-set]").forEach((c) => (c.onclick = () => {
       const set = PRESET_SETS[c.dataset.set] || [];
       pop.querySelectorAll("input").forEach((i) => (i.checked = set.includes(i.value)));
       count();
     }));
-    $("#mkDone").onclick = async () => {
-      state.planMarkets = [...pop.querySelectorAll("input:checked")].map((i) => i.value);
-      pop.classList.remove("show");
-      mkLabel();
-      await api("/api/state", { body: { planMarkets: state.planMarkets } });
-    };
+    $("#mkDone").onclick = () => pop.classList.remove("show");
   }
   document.addEventListener("mousedown", (e) => { const pop = $("#mkpop"); if (pop.classList.contains("show") && !pop.contains(e.target) && !e.target.closest("#planMk,.mk-btn")) pop.classList.remove("show"); });
   $("#planMk").onclick = (e) => openPicker(e.currentTarget);
