@@ -33,6 +33,14 @@ Yahoo's endpoints are unofficial, so data can be delayed or occasionally unavail
 
 Manual start: `pip install -r requirements.txt` then `python -m uvicorn backend.app:app --port 8420`.
 
+**Keep the server running while you use the app.** `start.bat` shows a black window. Minimise it rather than closing it,
+because closing it stops TradeScope. If the server ever crashes, it restarts on its own, and the pages reconnect
+automatically: a yellow "reconnecting" banner shows, then everything continues. Prefer no window at all? Double-click
+**`TradeScope (no window).vbs`** to run it in the background, and **`Stop TradeScope.bat`** to stop it.
+
+The layout adapts to your screen. Full-HD dual monitors get everything side by side; laptops (1366×768, 1280×720)
+get tighter columns; small windows switch to a scrolling layout. Popovers such as the market picker always fit on screen.
+
 ## The two screens
 
 | Monitor 1: **Command Center** | Monitor 2: **Research** |

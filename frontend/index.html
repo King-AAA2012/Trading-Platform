@@ -8,6 +8,57 @@
 <link rel="stylesheet" href="/css/app.css?v=5">
 <style>
   .grid.cmd { grid-template-columns: 330px minmax(560px, 1fr) 430px; }
+  /* ---- responsive: fit laptops and smaller monitors ---- */
+  @media (max-width: 1680px) {
+    .grid.cmd { grid-template-columns: 280px minmax(460px, 1fr) 380px; gap: 8px; padding: 8px; }
+    header.top { gap: 8px; padding: 0 10px; }
+    .brand small, #aist { display: none; }
+    #market { width: 200px !important; }
+    .search { width: 230px; }
+  }
+  @media (max-width: 1440px) {
+    .grid.cmd { grid-template-columns: 240px minmax(400px, 1fr) 350px; }
+    #market { width: 165px !important; }
+    .search { width: 170px; }
+    #clkTxt { display: none; }
+    th[data-k="spark"], #rows td:nth-child(4), th[data-k="setup"], #rows td:nth-child(7) { display: none; }
+    table.t td, table.t th { padding: 6px 5px; }
+    .mkpop .opts { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 1250px), (max-height: 680px) {
+    body { overflow: auto; }
+    .app { height: auto; min-height: 100vh; }
+    .grid.cmd { grid-template-columns: minmax(0, 1fr) 360px; }
+    .grid.cmd > section.panel { height: 80vh; order: 1; }
+    .grid.cmd > .col:last-child { height: 80vh; order: 2; }
+    .grid.cmd > .col:first-child { order: 3; grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1.4fr 1fr; height: 46vh; }
+  }
+  @media (max-width: 900px) {
+    .grid.cmd { grid-template-columns: 1fr; }
+    .grid.cmd > .col:first-child { grid-template-columns: 1fr; height: auto; }
+    .grid.cmd > .col:first-child > .panel { height: 42vh; }
+    header.top { flex-wrap: wrap; height: auto; padding: 6px 10px; }
+    .app { grid-template-rows: auto 30px 1fr; }
+  }
+  .tabs button { white-space: nowrap; }
+  #planMk span { display: inline-block; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+  section.panel:has(#plan) > .ph { flex-wrap: wrap; row-gap: 4px; }
+  @media (max-width: 1440px) {
+    #scanInfo { display: none; }
+    .tabs button { padding: 5px 7px; font-size: 12px; }
+    #planMk span { max-width: 90px; }
+    #filter { width: 100px !important; }
+    #wlSel { width: 84px !important; }
+    #wlNew, #wlAdd { padding: 3px 5px; font-size: 11px; }
+  }
+  @media (max-height: 860px) {
+    section.panel:has(#presets) { max-height: 42vh !important; }
+    header.top { height: 46px; }
+    .app { grid-template-rows: 46px 26px 1fr; }
+    .hint.b-only.scan-only, #pulseHint { display: none; }
+    .panel > .ph { padding: 7px 10px; }
+    .strip .tk { font-size: 11px; }
+  }
   .pulse { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   .gauge { height: 8px; border-radius: 5px; overflow: hidden; display: flex; margin: 6px 0 2px; }
   .mkpop { position: fixed; z-index: 90; width: 560px; max-height: 70vh; overflow: auto; background: var(--panel2); border: 1px solid var(--line2); border-radius: 12px; padding: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.6); display: none; }

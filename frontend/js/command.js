@@ -571,6 +571,22 @@
     document.querySelectorAll(".mk-label").forEach((el) => (el.textContent = txt));
     $("#planMk span").textContent = txt;
   }
+  // fit a popover on screen: below the button if there's room, else above, else centred; never taller than the window
+  function placePop(pop, anchor) {
+    const r = anchor.getBoundingClientRect();
+    const W = Math.min(560, innerWidth - 20);
+    pop.style.width = W + "px";
+    pop.style.maxHeight = "none";
+    pop.style.top = "0px";
+    pop.classList.add("show");
+    const want = Math.min(pop.scrollHeight, innerHeight - 20);
+    const below = innerHeight - r.bottom - 12, above = r.top - 12;
+    const top = want <= below ? r.bottom + 6 : want <= above ? r.top - 6 - want : Math.max(10, (innerHeight - want) / 2);
+    pop.style.top = top + "px";
+    pop.style.maxHeight = innerHeight - top - 10 + "px";
+    pop.style.left = Math.max(10, Math.min(r.left, innerWidth - W - 10)) + "px";
+  }
+  window.addEventListener("resize", () => $("#mkpop").classList.remove("show"));
   function openPicker(anchor) {
     const pop = $("#mkpop");
     const sel = new Set(state.planMarkets || []);
@@ -579,10 +595,7 @@
       <div class="chips" style="margin:8px 0">${Object.keys(PRESET_SETS).map((k) => `<span class="chip" data-set="${k}">${k}</span>`).join("")}<span class="chip" data-set="__clear">Clear</span></div>
       ${groups.map((g) => `<h5>${esc(g)}</h5><div class="opts">${markets.filter((m) => m.group === g).map((m) => `<label title="${esc(m.name)}"><input type="checkbox" value="${m.id}" ${sel.has(m.id) ? "checked" : ""}> ${m.flag} ${esc(m.name)}</label>`).join("")}</div>`).join("")}
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><span class="muted" id="mkCount" style="align-self:center;font-size:11.5px"></span><button class="btn primary sm" id="mkDone">Done</button></div>`;
-    const r = anchor.getBoundingClientRect();
-    pop.style.top = Math.min(r.bottom + 6, innerHeight - 200) + "px";
-    pop.style.left = Math.max(10, Math.min(r.left, innerWidth - 580)) + "px";
-    pop.classList.add("show");
+    placePop(pop, anchor);
     // every change is saved immediately, so closing the picker any way (Done, clicking away, Build plan) keeps it
     let saveT;
     const count = () => {

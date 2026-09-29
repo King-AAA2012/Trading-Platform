@@ -8,6 +8,7 @@ echo.
 where python >nul 2>nul || (
   echo  Python is required ^(free^). Install it from https://www.python.org/downloads/ and tick "Add to PATH".
   echo  Or run:  winget install Python.Python.3.12
+  if defined TS_HIDDEN exit /b 1
   pause & exit /b 1
 )
 python -m pip install -q -r requirements.txt
@@ -16,8 +17,8 @@ rem ---- free local AI (optional). Everything else works without it.
 where ollama >nul 2>nul
 if errorlevel 1 (
   echo  The AI analyst uses Ollama, a free local AI runtime. It is not installed.
-  choice /c YN /m "  Install Ollama now with winget (free, about 1 GB)"
-  if not errorlevel 2 winget install -e --id Ollama.Ollama --accept-package-agreements --accept-source-agreements
+  if not defined TS_HIDDEN choice /c YN /m "  Install Ollama now with winget (free, about 1 GB)"
+  if not defined TS_HIDDEN if not errorlevel 2 winget install -e --id Ollama.Ollama --accept-package-agreements --accept-source-agreements
 )
 where ollama >nul 2>nul
 if not errorlevel 1 (
@@ -34,4 +35,12 @@ rem ---- stop any older TradeScope server still holding port 8420, so the latest
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":8420 .*LISTENING"') do taskkill /F /PID %%p >nul 2>nul
 
 start "" http://127.0.0.1:8420/
+echo.
+echo  TradeScope is running at http://127.0.0.1:8420  -  keep this window open (minimise it).
+echo  Close this window to stop TradeScope.
+echo.
+:serve
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8420
+echo  Server stopped unexpectedly - restarting in 3 seconds...
+timeout /t 3 >nul
+goto serve

@@ -9,6 +9,14 @@
 <style>body.embed header.top .brand, body.embed #reportBtn { display: none; } body.embed .app.research { grid-template-rows: 46px 1fr; }</style>
 <style>
   .grid.res { grid-template-columns: minmax(0, 1fr) 470px; }
+  @media (max-width: 1600px) { .grid.res { grid-template-columns: minmax(0, 1fr) 410px; gap: 8px; padding: 8px; } .quote .nm { max-width: 200px; } #aist { display: none; } }
+  @media (max-width: 1360px) { .grid.res { grid-template-columns: minmax(0, 1fr) 370px; } .brand small, .quote .nm { display: none; } .search { width: 170px !important; } .toolbar .btn.sm { padding: 3px 6px; } }
+  @media (max-width: 1150px), (max-height: 680px) {
+    body { overflow: auto; } .app.research { height: auto; min-height: 100vh; }
+    .grid.res { grid-template-columns: 1fr; } .grid.res > section.panel { height: 78vh; } .grid.res > .col { min-height: 90vh; }
+    header.top { flex-wrap: wrap; height: auto; padding: 6px 10px; } .app.research { grid-template-rows: auto 1fr; }
+  }
+  @media (max-height: 860px) { header.top { height: 46px; } .app.research { grid-template-rows: 46px 1fr; } .panel > .ph { padding: 6px 10px; } .rec { padding: 10px; } }
   .quote { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
   .quote h1 { font-size: 18px; margin: 0; white-space: nowrap; }
   .quote .nm { color: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

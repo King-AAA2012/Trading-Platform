@@ -5,6 +5,49 @@ const TS = (() => {
   const listeners = [];
   bus.onmessage = (e) => listeners.forEach((f) => f(e.data));
 
+  // ---- resilient networking: if the local server is briefly unreachable (restarting, start.bat closed), retry
+  // quietly, then show a "reconnecting" banner and resume automatically once it's back, instead of failing.
+  let down = false, waiters = [];
+  function banner(show) {
+    let b = document.getElementById("ts-down");
+    if (show && !b) {
+      b = document.createElement("div");
+      b.id = "ts-down";
+      b.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9998;background:#3a2a08;color:#ffe3a3;border-bottom:1px solid #f5b942;padding:9px 14px;font-size:13px;display:flex;gap:10px;align-items:center;justify-content:center";
+      b.innerHTML = `<span class="spin"></span><b>Can't reach the TradeScope server.</b><span>Keep the <b>start.bat</b> window open (or double-click it again). Reconnecting automatically… your settings are safe.</span>`;
+      document.body.appendChild(b);
+    }
+    if (!show && b) b.remove();
+  }
+  async function waitForServer() {
+    if (!down) {
+      down = true;
+      banner(true);
+      (async () => {
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try { const r = await fetch("/api/ai/status", { cache: "no-store" }); if (r.ok) break; } catch {}
+        }
+        down = false;
+        banner(false);
+        toast("✅ Reconnected to the TradeScope server");
+        waiters.splice(0).forEach((f) => f());
+      })();
+    }
+    return new Promise((r) => waiters.push(r));
+  }
+  async function netFetch(path, init) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await fetch(path, init);
+      } catch (e) {                              // TypeError "Failed to fetch" = server unreachable, not an HTTP error
+        if (attempt < 2) { await new Promise((r) => setTimeout(r, 600 * (attempt + 1))); continue; }
+        await waitForServer();
+        attempt = -1;
+      }
+    }
+  }
+
   async function api(path, opts = {}) {
     const init = { ...opts };
     if (opts.body && typeof opts.body !== "string") {
@@ -12,13 +55,13 @@ const TS = (() => {
       init.headers = { "Content-Type": "application/json" };
       init.method = init.method || "POST";
     }
-    const r = await fetch(path, init);
+    const r = await netFetch(path, init);
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
     return r.json();
   }
 
   async function stream(path, body, onChunk) {
-    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const r = await netFetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `${r.status} ${r.statusText}`);
     const rd = r.body.getReader(), dec = new TextDecoder();
     let all = "";
@@ -188,7 +231,7 @@ const TS = (() => {
     b.innerHTML = `<b>Something went wrong:</b><span style="flex:1">${esc(msg)}</span><button class="btn sm" onclick="location.reload(true)">Reload page</button><button class="btn sm ghost" onclick="this.parentNode.remove()">✕</button>`;
   }
   window.addEventListener("error", (e) => { if (e.message && !/ResizeObserver loop/.test(e.message)) showError(e.message + (e.filename ? ` (${e.filename.split("/").pop()}:${e.lineno})` : "")); });
-  window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message || e.reason)));
+  window.addEventListener("unhandledrejection", (e) => { const m = String(e.reason?.message || e.reason); if (!/Failed to fetch|NetworkError|network error/i.test(m)) showError(m); });
 
   async function aiStatus(el) {
     const s = await api("/api/ai/status").catch(() => ({ online: false }));
