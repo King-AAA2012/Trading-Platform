@@ -30,5 +30,8 @@ if not errorlevel 1 (
   )
 )
 
+rem ---- stop any older TradeScope server still holding port 8420, so the latest version always runs
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":8420 .*LISTENING"') do taskkill /F /PID %%p >nul 2>nul
+
 start "" http://127.0.0.1:8420/
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8420

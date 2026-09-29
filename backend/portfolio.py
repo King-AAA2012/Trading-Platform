@@ -16,7 +16,9 @@ RISK = {
 
 
 def size(a: dict, profile: dict, cash: float | None = None, fractional: bool | None = None) -> dict:
-    cfg = RISK.get(profile.get("risk"), RISK["balanced"])
+    from .planner import params
+    P = params(profile)
+    cfg = {"risk": P["riskPerTrade"] / 100, "maxpos": P["maxPosition"] / 100}
     budget = float(profile.get("budget") or 0)
     frac = profile.get("fractional") if fractional is None else fractional
     lv = a["levels"]

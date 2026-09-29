@@ -11,7 +11,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, data, engine, markets, portfolio, scenario, store
+from . import ai, data, engine, markets, planner, portfolio, scenario, store
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONT = ROOT / "frontend"
@@ -266,12 +266,89 @@ def api_plan(body: dict = Body(...)):
     for h, a in zip(holdings, data.POOL.map(lambda h: by_sym.get(h["symbol"]) or _safe_analyze(h["symbol"]), holdings)):
         if a:
             held[h["symbol"]] = a
-    plan = portfolio.build_plan(rows, holdings, held, prof)
+    plan = planner.build(rows, dict(hists), holdings, held, prof, body.get("scenario"))
+    if plan.get("error"):
+        raise HTTPException(400, plan["error"])
     plan["markets"] = [markets.market_def(m)["name"] for m in mkts]
     plan["market"] = ", ".join(plan["markets"])
     plan["scenario"] = body["scenario"].get("title") if body.get("scenario") else None
     plan["generated"] = int(time.time())
     return J(plan)
+
+
+@app.get("/api/presets")
+def api_presets():
+    return J({"presets": planner.PRESETS, "defaults": planner.DEFAULTS, "sectors": scenario.SECTORS})
+
+
+@app.get("/api/holdings/summary")
+def api_holdings_summary():
+    """Live view of the user's holdings: price, value in their currency, P/L, day move, weight and the engine's signal."""
+    st = store.load()
+    ccy = st["profile"].get("currency", "USD")
+    hs = [h for h in st["holdings"] if h.get("symbol")]
+    qs = {q["symbol"]: q for q in data.quotes([h["symbol"] for h in hs])} if hs else {}
+    sigs = dict(zip([h["symbol"] for h in hs], data.POOL.map(lambda h: _safe_analyze(h["symbol"]), hs)))
+    rows, tot, cost_tot, day_tot = [], 0.0, 0.0, 0.0
+    for h in hs:
+        q = qs.get(h["symbol"], {})
+        a = sigs.get(h["symbol"]) or {}
+        px = q.get("price") or a.get("price")
+        qccy = q.get("currency") or a.get("currency") or ccy
+        fx = data.fx_rate(qccy, ccy)
+        qty = float(h.get("qty") or 0)
+        sgn = 1 if h.get("side", "long") == "long" else -1
+        val = (px or 0) * qty * fx
+        cost = (h.get("avgCost") or px or 0) * qty * fx
+        pnl = (val - cost) * sgn
+        day = val * (q.get("changePct") or 0) / 100 * sgn
+        tot += val * sgn
+        cost_tot += cost * sgn
+        day_tot += day
+        rows.append({**h, "name": q.get("name") or a.get("name") or h["symbol"], "price": px, "quoteCurrency": qccy, "changePct": q.get("changePct"),
+                     "value": val, "cost": cost, "pnl": pnl, "pnlPct": pnl / cost if cost else None, "day": day, "signal": a.get("signal"),
+                     "score": a.get("score"), "sector": a.get("sector"), "stop": (a.get("levels") or {}).get("stop"), "atrPct": a.get("atrPct")})
+    for r in rows:
+        r["weight"] = r["value"] / tot if tot else 0
+    return J({"currency": ccy, "rows": rows, "total": tot, "cost": cost_tot, "pnl": tot - cost_tot, "day": day_tot})
+
+
+@app.post("/api/holdings/apply")
+def api_holdings_apply(body: dict = Body(...)):
+    """Record plan actions in the user's holdings (research bookkeeping only; nothing is sent to any broker)."""
+    st = store.load()
+    hs = {h["symbol"]: dict(h) for h in st["holdings"] if h.get("symbol")}
+    prof = st["profile"]
+    applied = []
+    for a in body.get("actions", []):
+        s, act = a["symbol"], a["action"]
+        qty, px = float(a.get("qty") or 0), float(a.get("price") or 0)
+        if qty <= 0 or act in ("HOLD", "REVIEW"):
+            continue
+        h = hs.get(s)
+        if act in ("BUY", "ADD", "SHORT"):
+            side = "short" if act == "SHORT" else "long"
+            if h and h.get("side", "long") == side:
+                tq = float(h["qty"]) + qty
+                h["avgCost"] = round(((h.get("avgCost") or px) * float(h["qty"]) + px * qty) / tq, 6)
+                h["qty"] = round(tq, 6)
+            else:
+                hs[s] = {"symbol": s, "qty": qty, "avgCost": px, "side": side, "added": int(time.time())}
+            if prof.get("cash") not in (None, ""):
+                prof["cash"] = max(0.0, float(prof["cash"]) - float(a.get("value") or 0))
+        elif act in ("SELL", "COVER", "TRIM") and h:
+            left = float(h["qty"]) - qty
+            if left <= 1e-9:
+                hs.pop(s)
+            else:
+                h["qty"] = round(left, 6)
+            if prof.get("cash") not in (None, ""):
+                prof["cash"] = float(prof["cash"]) + float(a.get("value") or 0)
+        applied.append(f"{act} {qty:g} {s}")
+    st["holdings"] = list(hs.values())
+    st["profile"] = prof
+    store.save(st)
+    return J({"applied": applied, "holdings": st["holdings"]})
 
 
 def _safe_analyze(sym):

@@ -19,6 +19,7 @@ const TS = (() => {
 
   async function stream(path, body, onChunk) {
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `${r.status} ${r.statusText}`);
     const rd = r.body.getReader(), dec = new TextDecoder();
     let all = "";
     for (;;) {
@@ -95,30 +96,99 @@ const TS = (() => {
   }
   listeners.push((m) => m.type === "mode" && setMode(m.mode, false));
 
-  function bindSearch(input, box, onPick) {
-    let h, items = [], sel = -1;
-    const render = () => { box.innerHTML = items.map((x, i) => `<div class="${i === sel ? "sel" : ""}" data-i="${i}"><span><b>${esc(disp(x.symbol))}</b> <span class="muted">${esc(x.name)}</span></span><span class="dim">${esc(x.exchange)} · ${esc(x.type)}</span></div>`).join(""); box.classList.toggle("show", items.length > 0); };
-    input.addEventListener("input", () => {
+  // ---- smart search: recent + popular on focus, instant local matches, live API results, inline autofill (Tab / →)
+  const known = new Map();          // symbols the app already knows (scans, watchlist, holdings) for instant matches
+  function remember(list) { (list || []).forEach((x) => x && x.symbol && !known.has(x.symbol) && known.set(x.symbol, { symbol: x.symbol, name: x.name || x.symbol, exchange: x.exchange || x.marketName || "", type: x.type || "Stock" })); }
+  const POPULAR = [["AAPL", "Apple"], ["NVDA", "NVIDIA"], ["MSFT", "Microsoft"], ["TSLA", "Tesla"], ["AMZN", "Amazon"], ["RELIANCE.NS", "Reliance Industries"],
+    ["BTC-USD", "Bitcoin"], ["SPY", "S&P 500 ETF"], ["GC=F", "Gold"], ["EURUSD=X", "EUR/USD"]].map(([symbol, name]) => ({ symbol, name, exchange: "", type: "Popular" }));
+  const recent = () => { try { return JSON.parse(localStorage.getItem("ts-recent") || "[]"); } catch { return []; } };
+  const pushRecent = (x) => { try { localStorage.setItem("ts-recent", JSON.stringify([x, ...recent().filter((r) => r.symbol !== x.symbol)].slice(0, 8))); } catch {} };
+
+  function bindSearch(input, box, onPick, opts = {}) {
+    let h, items = [], sel = 0, seq = 0;
+    const label = (x) => `<div class="${items.indexOf(x) === sel ? "sel" : ""}" data-i="${items.indexOf(x)}"><span><b>${esc(disp(x.symbol))}</b> <span class="muted">${esc(x.name)}</span></span><span class="dim">${esc([x.exchange, x.type].filter(Boolean).join(" · "))}</span></div>`;
+    const render = (head) => {
+      box.innerHTML = (head ? `<div class="dim" style="font-size:10.5px;padding:6px 11px 2px;cursor:default;text-transform:uppercase;letter-spacing:.5px">${head}</div>` : "") + items.map(label).join("") +
+        (items.length ? `<div class="dim" style="font-size:10.5px;padding:5px 11px;cursor:default;border-top:1px solid var(--line)">↑↓ choose · Enter open · Tab autocomplete · Esc close</div>` : "");
+      box.classList.toggle("show", items.length > 0);
+    };
+    const localMatches = (q) => {
+      const ql = q.toLowerCase();
+      const pool = [...recent(), ...known.values(), ...POPULAR];
+      const seen = new Set(), out = [];
+      for (const x of pool) {
+        if (seen.has(x.symbol)) continue;
+        const sym = disp(x.symbol).toLowerCase(), nm = (x.name || "").toLowerCase();
+        const rank = sym.startsWith(ql) ? 0 : nm.startsWith(ql) ? 1 : sym.includes(ql) || nm.includes(ql) ? 2 : -1;
+        if (rank >= 0) { seen.add(x.symbol); out.push([rank, x]); }
+      }
+      return out.sort((a, b) => a[0] - b[0]).slice(0, 8).map((r) => r[1]);
+    };
+    const autofill = (typed, e) => {   // complete the top symbol inline, leaving the completion selected
+      if (!items.length || (e && e.inputType && e.inputType.startsWith("delete"))) return;
+      const top = disp(items[0].symbol);
+      if (top.toLowerCase().startsWith(typed.toLowerCase()) && top.length > typed.length && input.value === typed) {
+        input.value = typed + top.slice(typed.length);
+        input.setSelectionRange(typed.length, top.length);
+      }
+    };
+    const showStart = () => {
+      if (input.value.trim()) return;
+      items = [...recent(), ...POPULAR.filter((p) => !recent().some((r) => r.symbol === p.symbol))].slice(0, 10);
+      sel = 0; render(recent().length ? "Recent & popular" : "Popular");
+    };
+    input.addEventListener("focus", showStart);
+    input.addEventListener("input", (e) => {
       clearTimeout(h);
-      const q = input.value.trim();
-      if (!q) { items = []; render(); return; }
-      h = setTimeout(async () => { items = await api("/api/search?q=" + encodeURIComponent(q)).catch(() => []); sel = -1; render(); }, 220);
+      const typed = input.value.slice(0, input.selectionStart ?? input.value.length).trim();
+      if (!typed) { showStart(); return; }
+      items = localMatches(typed); sel = 0; render(items.length ? "Matches" : ""); autofill(typed, e);
+      const my = ++seq;
+      h = setTimeout(async () => {
+        const res = await api("/api/search?q=" + encodeURIComponent(typed)).catch(() => []);
+        if (my !== seq) return;
+        const seen = new Set(items.map((x) => x.symbol));
+        items = [...items, ...res.filter((x) => !seen.has(x.symbol))].slice(0, 12);
+        render("Matches"); autofill(typed, e);
+      }, 180);
     });
+    const pick = (x) => {
+      if (!x || !x.symbol) return;
+      pushRecent({ symbol: x.symbol, name: x.name, exchange: x.exchange, type: x.type === "Popular" ? "" : x.type });
+      items = []; render();
+      if (!opts.keepValue) { input.value = ""; input.blur(); } else input.value = disp(x.symbol);
+      onPick(x.symbol, x);
+    };
     input.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowDown") { sel = Math.min(sel + 1, items.length - 1); render(); e.preventDefault(); }
-      else if (e.key === "ArrowUp") { sel = Math.max(sel - 1, 0); render(); e.preventDefault(); }
-      else if (e.key === "Enter") {
-        const pick = items[sel] || items[0] || { symbol: input.value.trim().toUpperCase() };
-        if (pick.symbol) { onPick(pick.symbol); items = []; render(); input.value = ""; input.blur(); }
+      if (e.key === "ArrowDown") { sel = Math.min(sel + 1, items.length - 1); render(input.value ? "Matches" : "Recent & popular"); e.preventDefault(); }
+      else if (e.key === "ArrowUp") { sel = Math.max(sel - 1, 0); render(input.value ? "Matches" : "Recent & popular"); e.preventDefault(); }
+      else if ((e.key === "Tab" || e.key === "ArrowRight") && input.selectionStart !== input.selectionEnd) {   // accept autofill
+        input.setSelectionRange(input.value.length, input.value.length); e.preventDefault();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const typed = input.value.trim().toUpperCase();
+        pick(items[sel] || items.find((x) => disp(x.symbol).toUpperCase() === typed) || (typed ? { symbol: typed, name: typed } : null));
       } else if (e.key === "Escape") { items = []; render(); input.blur(); }
     });
-    box.addEventListener("mousedown", (e) => {
-      const d = e.target.closest("[data-i]");
-      if (d) { onPick(items[+d.dataset.i].symbol); items = []; render(); input.value = ""; }
-    });
+    box.addEventListener("mousedown", (e) => { const d = e.target.closest("[data-i]"); if (d) { e.preventDefault(); pick(items[+d.dataset.i]); } });
     input.addEventListener("blur", () => setTimeout(() => box.classList.remove("show"), 150));
-    document.addEventListener("keydown", (e) => { if (e.key === "/" && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") { e.preventDefault(); input.focus(); } });
+    if (opts.global !== false)
+      document.addEventListener("keydown", (e) => { if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) { e.preventDefault(); input.focus(); } });
   }
+
+  // ---- visible error banner: a broken page should say so, not silently stop responding
+  function showError(msg) {
+    let b = document.getElementById("ts-err");
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "ts-err";
+      b.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;background:#3a0f18;color:#ffd5dc;border-bottom:1px solid #ff5470;padding:8px 14px;font-size:12.5px;display:flex;gap:10px;align-items:center";
+      document.body.appendChild(b);
+    }
+    b.innerHTML = `<b>Something went wrong:</b><span style="flex:1">${esc(msg)}</span><button class="btn sm" onclick="location.reload(true)">Reload page</button><button class="btn sm ghost" onclick="this.parentNode.remove()">✕</button>`;
+  }
+  window.addEventListener("error", (e) => { if (e.message && !/ResizeObserver loop/.test(e.message)) showError(e.message + (e.filename ? ` (${e.filename.split("/").pop()}:${e.lineno})` : "")); });
+  window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message || e.reason)));
 
   async function aiStatus(el) {
     const s = await api("/api/ai/status").catch(() => ({ online: false }));
@@ -127,5 +197,5 @@ const TS = (() => {
   }
 
   return { api, stream, send: (m) => bus.postMessage(m), on: (f) => listeners.push(f), price, money, pct, cls, big, esc, disp, sigClass,
-           scoreBar, confRing, spark, md, toast, mode, setMode, bindSearch, aiStatus };
+           scoreBar, confRing, spark, md, toast, mode, setMode, bindSearch, aiStatus, remember, showError };
 })();

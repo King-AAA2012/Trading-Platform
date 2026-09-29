@@ -5,12 +5,16 @@
   const LW = window.LightweightCharts;
   const params = new URLSearchParams(location.search);
   let sym = params.get("symbol"), market = params.get("market"), A = null, state = null, tab = "why", tf = "1Y";
-  let chat = [], aiReport = "", newsCache = null, plan = null;
+  let chat = [], aiReport = "", newsCache = null, plan = null, pending = null;
+  const EMBED = params.get("embed") === "1";      // shown inside the Command screen's popup on single-monitor setups
+  if (EMBED) document.body.classList.add("embed");
+  if (EMBED) document.addEventListener("keydown", (e) => { if (e.key === "Escape") parent.postMessage("ts-close", location.origin); });
+  const pong = () => TS.send({ type: "pong", from: EMBED ? "overlay" : "window" });
 
   TS.setMode(TS.mode(), false);
   document.querySelectorAll("[data-mode]").forEach((b) => (b.onclick = () => { TS.setMode(b.dataset.mode); setTimeout(draw, 80); }));
   TS.on((m) => {
-    if (m.type === "ping") TS.send({ type: "pong" });
+    if (m.type === "ping") pong();
     if (m.type === "select" && m.from !== "research") { market = m.market || market; load(m.symbol); }
     if (m.type === "profile" && sym) load(sym, true);
     if (m.type === "refresh" && sym) load(sym, true);
@@ -18,7 +22,7 @@
     if (m.type === "watch" && state) { state.watchlist = m.watchlist; watchBtn(); }
     if (m.type === "mode") setTimeout(draw, 80);
   });
-  TS.send({ type: "pong" });
+  pong();
   TS.bindSearch($("#q"), $("#qres"), (s) => { load(s); TS.send({ type: "select", symbol: s, from: "research" }); });
   TS.aiStatus($("#aist"));
 
@@ -183,7 +187,11 @@
   document.querySelectorAll("#rtabs button").forEach((b) => (b.onclick = () => {
     tab = b.dataset.t; document.querySelectorAll("#rtabs button").forEach((x) => x.classList.toggle("on", x === b)); renderTab();
   }));
-  function renderTab() { if (A) ({ why: tabWhy, fund: tabFund, bt: tabBt, news: tabNews, ai: tabAi })[tab](); }
+  function renderTab() {
+    $("#aiFooter").style.display = tab === "ai" ? "" : "none";
+    if (tab === "ai") return tabAi();                 // the AI works even before (or without) a loaded analysis
+    if (A) ({ why: tabWhy, fund: tabFund, bt: tabBt, news: tabNews })[tab]();
+  }
 
   function factorBars() {
     return `<div class="bars">${A.factors.map((f) => {
@@ -241,28 +249,43 @@
       <div class="meta">${esc(n.publisher || "")} · ${n.time ? new Date(n.time * 1000).toLocaleString() : ""}</div></a>`).join("")}</div>` : `<div class="empty">No recent headlines.</div>`;
   }
   function tabAi() {
-    $("#tabBody").innerHTML = `<div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn primary" id="genReport">✨ Generate AI research note</button><span class="spacer"></span><span class="dim" style="font-size:11px;align-self:center">runs 100% locally</span></div>
-      <div id="aiOut" class="md">${aiReport ? TS.md(aiReport) : `<div class="muted">The local AI reads everything the engine computed (factors, levels, backtest, fundamentals, headlines and your budget) and writes a plain-English note. Or ask it anything below.</div>`}</div>
-      <div id="chat" style="margin-top:14px">${chat.map((m) => `<div class="msg ${m.role} md">${TS.md(m.content)}</div>`).join("")}</div>
-      <div style="display:flex;gap:6px;margin-top:10px;position:sticky;bottom:0;background:var(--panel);padding-top:6px">
-        <input class="in" id="ask" placeholder="Ask about ${esc(disp(sym))}… e.g. 'Is this a good long-term hold?'"><button class="btn" id="askBtn">Ask</button></div>`;
+    const name = A ? disp(A.symbol) : sym ? disp(sym) : "the market";
+    $("#tabBody").innerHTML = `<div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn primary" id="genReport" ${A ? "" : "disabled"}>✨ Generate AI research note</button><span class="spacer"></span><span class="dim" style="font-size:11px;align-self:center">runs 100% locally</span></div>
+      <div id="aiOut" class="md">${aiReport ? TS.md(aiReport) : `<div class="muted">Ask anything about ${esc(name)}: whether it's a good long-term hold, what the risks are, how it compares with peers, or how much to buy. The AI sees everything the engine computed plus the latest headlines and your budget.</div>`}</div>
+      <div id="chat" style="margin-top:14px;display:flex;flex-direction:column;gap:8px">${chat.map((m) => `<div class="msg ${m.role} md">${TS.md(m.content)}</div>`).join("")}${pending ? `<div class="msg assistant md cursor" id="pending">${pending.text ? TS.md(pending.text) : `<span class="muted">Thinking… ${pending.secs}s</span>`}</div>` : ""}</div>`;
+    $("#ask").placeholder = `Ask about ${name}… (Enter to send · Shift+Enter for a new line)`;
     $("#genReport").onclick = async () => {
-      const out = $("#aiOut"); out.classList.add("cursor"); out.innerHTML = "";
-      aiReport = await TS.stream("/api/ai/report", { symbol: sym, market }, (t) => { if ($("#aiOut")) $("#aiOut").innerHTML = TS.md(t); });
+      const out = $("#aiOut"); out.classList.add("cursor"); out.innerHTML = `<span class="muted">Writing the note…</span>`;
+      try { aiReport = await TS.stream("/api/ai/report", { symbol: sym, market }, (t) => { if ($("#aiOut")) $("#aiOut").innerHTML = TS.md(t); }); }
+      catch (e) { if ($("#aiOut")) $("#aiOut").innerHTML = `<div class="down">AI request failed: ${esc(e.message)}</div>`; }
       $("#aiOut")?.classList.remove("cursor");
     };
-    const ask = async () => {
-      const q = $("#ask").value.trim(); if (!q) return;
-      chat.push({ role: "user", content: q }); $("#ask").value = "";
-      const box = $("#chat");
-      box.insertAdjacentHTML("beforeend", `<div class="msg user md">${TS.md(q)}</div><div class="msg assistant md cursor" id="pending"></div>`);
-      const ans = await TS.stream("/api/ai/chat", { symbol: sym, market, messages: chat, plan }, (t) => { const p = $("#pending"); if (p) p.innerHTML = TS.md(t); });
-      chat.push({ role: "assistant", content: ans });
-      const p = $("#pending"); if (p) { p.classList.remove("cursor"); p.removeAttribute("id"); }
-    };
-    $("#askBtn").onclick = ask;
-    $("#ask").onkeydown = (e) => e.key === "Enter" && ask();
+    $("#tabBody").scrollTop = $("#tabBody").scrollHeight;
   }
+  async function ask() {
+    const box = $("#ask"), q = box.value.trim();
+    if (!q || pending) return;
+    if (tab !== "ai") document.querySelector('#rtabs button[data-t="ai"]').click();
+    chat.push({ role: "user", content: q });
+    box.value = "";
+    pending = { text: "", secs: 0 };
+    const t0 = Date.now();
+    const tick = setInterval(() => { if (!pending) return; pending.secs = Math.round((Date.now() - t0) / 1000); const p = $("#pending"); if (p && !pending.text) p.innerHTML = `<span class="muted">Thinking… ${pending.secs}s${pending.secs > 15 ? " (the local model may still be loading)" : ""}</span>`; }, 1000);
+    if (tab === "ai") tabAi();
+    let ans = "";
+    try {
+      ans = await TS.stream("/api/ai/chat", { symbol: sym, market, messages: chat, plan }, (t) => { pending.text = t; const p = $("#pending"); if (p) { p.innerHTML = TS.md(t); $("#tabBody").scrollTop = $("#tabBody").scrollHeight; } });
+    } catch (e) {
+      ans = `⚠️ The AI request failed: ${e.message}. Make sure Ollama is running (rerun start.bat).`;
+    }
+    clearInterval(tick);
+    chat.push({ role: "assistant", content: ans || "(no answer)" });
+    pending = null;
+    if (tab === "ai") tabAi();
+    box.focus();
+  }
+  $("#askBtn").onclick = ask;
+  $("#ask").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); } });
 
   // ---------------- watch + report
   function watchBtn() { const on = state?.watchlist?.includes(sym); $("#watchBtn").textContent = on ? "★ Watching" : "☆ Watch"; }

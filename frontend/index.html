@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TradeScope · Command</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b8cff'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none'/></svg>">
-<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/app.css?v=4">
 <style>
   .grid.cmd { grid-template-columns: 330px minmax(560px, 1fr) 430px; }
   .pulse { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -28,8 +28,42 @@
   #donut .lg { flex: 1; font-size: 11.5px; max-height: 150px; overflow: auto; }
   #donut .lg div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
   .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
-  .hold-row { display: grid; grid-template-columns: 1.3fr .8fr .9fr .7fr 22px; gap: 5px; margin-bottom: 5px; }
-  .hold-row input, .hold-row select { padding: 4px 6px; font-size: 12px; }
+  /* strategy settings */
+  .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 10px; }
+  .presets button { background: var(--panel2); border: 1px solid var(--line2); border-radius: 8px; padding: 6px 4px; cursor: pointer; font-size: 12px; color: var(--muted); }
+  .presets button.on { border-color: var(--accent); color: var(--text); background: var(--accent-bg); }
+  .slider { display: grid; grid-template-columns: 1fr 64px; gap: 8px; align-items: center; }
+  .slider input[type=range] { width: 100%; accent-color: var(--accent); }
+  .slider input[type=number] { padding: 3px 6px; text-align: right; }
+  details.adv summary { cursor: pointer; color: var(--accent); font-size: 12px; margin: 10px 0 6px; list-style: none; }
+  details.adv summary::before { content: "▸ "; } details.adv[open] summary::before { content: "▾ "; }
+  .field label .q { color: var(--dim); cursor: help; }
+  /* plan */
+  .act { grid-template-columns: 64px 1fr auto; }
+  .act .ok { margin-top: 5px; }
+  .act.done { opacity: .45; }
+  .tagline { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  /* holdings */
+  .hmodal { width: min(1180px, 96vw); }
+  .hsum { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+  .hsum > div { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .hsum label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  .hsum b { display: block; font-family: var(--mono); font-size: 20px; margin-top: 2px; }
+  .hadd { display: grid; grid-template-columns: 2.2fr .9fr 1fr .8fr auto; gap: 8px; align-items: end; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+  .hadd .search { width: 100%; }
+  table.ht td input { width: 90px; padding: 3px 6px; text-align: right; background: transparent; border: 1px solid transparent; border-radius: 6px; }
+  table.ht td input:hover, table.ht td input:focus { border-color: var(--line2); background: #0a0e15; }
+  .wbar { height: 6px; background: #1a2130; border-radius: 4px; width: 70px; display: inline-block; vertical-align: middle; margin-right: 6px; }
+  .wbar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+  /* analysis + research overlay */
+  .amodal { width: min(1280px, 96vw); max-height: 92vh; }
+  .agrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 12px; }
+  .vote { display: grid; grid-template-columns: 170px 110px 1fr; gap: 10px; padding: 5px 0; border-bottom: 1px dashed #1a2231; font-size: 12px; align-items: start; }
+  .overlay { position: fixed; inset: 0; z-index: 150; background: rgba(3,5,9,.72); backdrop-filter: blur(3px); display: none; padding: 2.5vh 2vw; }
+  .overlay.show { display: block; }
+  .overlay .frame { position: relative; width: 100%; height: 100%; border-radius: 14px; overflow: hidden; border: 1px solid var(--line2); box-shadow: 0 30px 80px rgba(0,0,0,.6); background: var(--bg); }
+  .overlay iframe { width: 100%; height: 100%; border: 0; }
+  .overlay .x { position: absolute; top: 8px; right: 10px; z-index: 5; }
 </style>
 </head>
 <body>
@@ -79,7 +113,7 @@
         <input id="filter" class="in" placeholder="Filter…" style="width:150px;padding:4px 8px">
         <button class="btn sm" id="refresh">↻ Rescan</button>
       </div>
-      <div class="hint b-only scan-only" style="margin:8px 12px 0">Every row is scored from <b>-100</b> (strongly bearish) to <b>+100</b> (strongly bullish) by combining trend, momentum, relative strength, breakouts, RSI, MACD and volume. <b>Confidence</b> blends factor agreement with how often this signal was right on that instrument in the past. <b>Click a row</b> to open its full research on the other screen.</div>
+      <div class="hint b-only scan-only" style="margin:8px 12px 0">Every row is scored from <b>-100</b> (strongly bearish) to <b>+100</b> (strongly bullish) by combining trend, momentum, relative strength, breakouts, RSI, MACD and volume. <b>Confidence</b> blends factor agreement with how often this signal was right on that instrument in the past. <b>Click</b> a row to select it, <b>double-click</b> to open full research (on your second screen, or in a popup if you have one monitor).</div>
       <div class="pb wi" id="whatif" style="display:none"></div>
       <div class="pb scan-only" style="padding:0 0 4px">
         <table class="t"><thead><tr>
@@ -93,27 +127,46 @@
 
     <!-- RIGHT -->
     <div class="col">
-      <section class="panel" style="flex:none">
-        <div class="ph">My Budget & Risk <span class="spacer"></span><span class="sub">saved locally</span></div>
+      <section class="panel" style="flex:none;max-height:52vh">
+        <div class="ph">My Strategy <span class="spacer"></span><span class="sub">saved automatically</span></div>
         <div class="pb">
+          <div class="presets" id="presets"><button data-p="conservative">🛡️ Safe</button><button data-p="balanced">⚖️ Balanced</button><button data-p="aggressive">🚀 Aggressive</button><button data-p="custom">🎛️ Custom</button></div>
           <div class="form">
-            <div class="field"><label>Total budget</label><input class="in num" id="pBudget" type="number" min="0" step="100"></div>
-            <div class="field"><label>Currency</label><select class="in" id="pCcy"><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option><option>JPY</option><option>CAD</option><option>AUD</option><option>HKD</option></select></div>
-            <div class="field"><label>Max to deploy per day</label><input class="in num" id="pDaily" type="number" min="0" step="100"></div>
-            <div class="field"><label>Risk profile</label><select class="in" id="pRisk"><option value="conservative">Conservative</option><option value="balanced">Balanced</option><option value="aggressive">Aggressive</option></select></div>
-            <div class="field"><label>Cash available <span class="dim">(blank = auto)</span></label><input class="in num" id="pCash" type="number" min="0" step="100"></div>
-            <div class="field" style="justify-content:flex-end;gap:6px">
-              <label class="check"><input type="checkbox" id="pShort"> Include short ideas</label>
-              <label class="check"><input type="checkbox" id="pFrac"> Fractional shares</label>
-            </div>
+            <div class="field"><label>Total budget</label><input class="in num" data-k="budget" type="number" min="0" step="100"></div>
+            <div class="field"><label>Currency</label><select class="in" data-k="currency"><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option><option>JPY</option><option>CAD</option><option>AUD</option><option>HKD</option><option>SGD</option><option>CHF</option></select></div>
+            <div class="field" style="grid-column:1/3"><label>Risk per trade <span class="q" title="How much of your budget you're willing to lose on one idea if its stop-loss is hit">ⓘ</span></label><div class="slider"><input type="range" min="0.1" max="5" step="0.1" data-r="riskPerTrade"><input class="in num" type="number" min="0.1" max="10" step="0.1" data-k="riskPerTrade"></div></div>
+            <div class="field" style="grid-column:1/3"><label>Max portfolio loss I can stomach (drawdown %) <span class="q" title="The engine scales exposure down if this mix fell more than this at its worst last year, and reports the chance of breaching it">ⓘ</span></label><div class="slider"><input type="range" min="5" max="60" step="1" data-r="maxDrawdown"><input class="in num" type="number" min="3" max="80" step="1" data-k="maxDrawdown"></div></div>
+            <div class="field"><label>Max to invest per day</label><input class="in num" data-k="dailyLimit" type="number" min="0" step="100" placeholder="no limit"></div>
+            <div class="field"><label>Holding horizon</label><select class="in" data-k="horizon"><option value="short">Short (days–weeks)</option><option value="medium">Medium (weeks–months)</option><option value="long">Long (months–years)</option></select></div>
           </div>
+          <details class="adv"><summary>Advanced settings</summary>
+          <div class="form">
+            <div class="field" style="grid-column:1/3"><label>Target volatility (%/yr) <span class="q" title="How much the whole portfolio is allowed to swing in a typical year. The optimiser uses this as a ceiling.">ⓘ</span></label><div class="slider"><input type="range" min="4" max="45" step="1" data-r="targetVol"><input class="in num" type="number" min="2" max="80" step="1" data-k="targetVol"></div></div>
+            <div class="field"><label>Max per position %</label><input class="in num" data-k="maxPosition" type="number" min="1" max="100" step="1"></div>
+            <div class="field"><label>Max per sector %</label><input class="in num" data-k="maxSector" type="number" min="5" max="100" step="1"></div>
+            <div class="field"><label>Max positions</label><input class="in num" data-k="maxPositions" type="number" min="1" max="40" step="1"></div>
+            <div class="field"><label>Cash reserve %</label><input class="in num" data-k="cashReserve" type="number" min="0" max="90" step="1"></div>
+            <div class="field"><label>Optimiser goal</label><select class="in" data-k="objective"><option value="sharpe">Best return per risk (Sharpe)</option><option value="minvol">Lowest volatility</option><option value="return">Highest return</option><option value="parity">Risk parity (equal risk)</option><option value="balanced">Balanced blend</option></select></div>
+            <div class="field"><label>Style</label><select class="in" data-k="style"><option value="any">Any</option><option value="growth">Growth</option><option value="value">Value</option><option value="dividend">Dividend income</option><option value="momentum">Momentum</option><option value="quality">Quality</option><option value="defensive">Defensive</option></select></div>
+            <div class="field"><label>Min committee conviction %</label><input class="in num" data-k="minConviction" type="number" min="0" max="90" step="1"></div>
+            <div class="field"><label>Stop-loss distance (× ATR)</label><input class="in num" data-k="stopAtr" type="number" min="0.5" max="6" step="0.1"></div>
+            <div class="field"><label>Rebalance band %</label><input class="in num" data-k="rebalanceBand" type="number" min="0" max="20" step="0.5"></div>
+            <div class="field"><label>Min market cap ($B)</label><input class="in num" data-k="minMarketCap" type="number" min="0" step="1" placeholder="0 = any"></div>
+            <div class="field"><label>Cash available <span class="dim">(blank = auto)</span></label><input class="in num" data-k="cash" type="number" min="0" step="100"></div>
+            <div class="field" style="justify-content:flex-end;gap:6px">
+              <label class="check"><input type="checkbox" data-k="allowShorts"> Include short ideas</label>
+              <label class="check"><input type="checkbox" data-k="fractional"> Fractional shares</label>
+            </div>
+            <div class="field" style="grid-column:1/3"><label>Exclude sectors</label><div class="chips" id="exSectors"></div></div>
+          </div>
+          </details>
           <div class="b-only muted" style="font-size:11.5px;margin-top:8px" id="riskExplain"></div>
         </div>
       </section>
       <section class="panel" style="flex:1">
         <div class="ph">Today's Portfolio Plan <span class="spacer"></span>
           <button class="btn sm" id="planMk" title="Which markets the portfolio, AI and reports draw from">🌍 <span></span></button>
-          <button class="btn sm" id="holdBtn">My holdings (<span id="nHold">0</span>)</button>
+          <button class="btn sm" id="holdBtn">💼 Holdings (<span id="nHold">0</span>)</button>
           <button class="btn sm primary" id="planBtn">Build plan</button></div>
         <div class="pb" id="plan"><div class="empty">Set your budget, then press <b>Build plan</b>. You'll get exactly what to buy, sell or trim today, and how many units.</div></div>
       </section>
@@ -121,17 +174,32 @@
   </main>
 </div>
 
-<!-- holdings modal -->
-<div class="modal-bg" id="holdModal"><div class="modal">
-  <h3>My holdings <span class="muted" style="font-size:12px;font-weight:400">(for tracking and plan advice only; no orders are ever placed)</span></h3>
-  <div class="hold-row muted" style="font-size:11px"><span>Symbol</span><span>Quantity</span><span>Avg cost</span><span>Side</span><span></span></div>
-  <div id="holdRows"></div>
-  <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="holdAdd">＋ Add row</button><span class="spacer"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="holdSave">Save</button></div>
+<!-- holdings -->
+<div class="modal-bg" id="holdModal"><div class="modal hmodal">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><h3 style="margin:0">💼 My Holdings</h3><span class="muted" style="font-size:12px">Tracking only. TradeScope never places orders.</span><span class="spacer"></span>
+    <button class="btn sm" id="hImport">⬆ Import CSV</button><button class="btn sm" id="hExport">⬇ Export CSV</button><button class="btn sm ghost" data-close>✕ Close</button></div>
+  <div class="hsum"><div><label>Market value</label><b id="hsVal">–</b></div><div><label>Total P/L</label><b id="hsPnl">–</b></div><div><label>Today</label><b id="hsDay">–</b></div><div><label>Positions</label><b id="hsN">–</b></div></div>
+  <div class="hadd">
+    <div class="field"><label>Add a stock, ETF, crypto…</label><div class="search"><span class="ico">⌕</span><input id="haSym" class="in" placeholder="Type a name or ticker, e.g. Apple or AAPL" autocomplete="off"><div id="haRes" class="results"></div></div></div>
+    <div class="field"><label>Quantity</label><input id="haQty" class="in num" type="number" min="0" step="any" placeholder="10"></div>
+    <div class="field"><label>Buy price <span class="dim" id="haNow"></span></label><input id="haCost" class="in num" type="number" min="0" step="any" placeholder="auto = today's price"></div>
+    <div class="field"><label>Side</label><select id="haSide" class="in"><option value="long">Long (own)</option><option value="short">Short</option></select></div>
+    <button class="btn primary" id="haAdd" style="height:34px">＋ Add</button>
+  </div>
+  <div style="max-height:52vh;overflow:auto"><table class="t ht"><thead><tr><th>Holding</th><th class="r">Qty</th><th class="r">Avg cost</th><th class="r">Price</th><th class="r">Value</th><th class="r">P/L</th><th class="r">Today</th><th>Weight</th><th>Signal</th><th class="r">Stop</th><th></th></tr></thead><tbody id="hRows"></tbody></table></div>
+  <textarea id="hCsv" class="in mono" rows="5" style="display:none;margin-top:10px" placeholder="symbol,qty,avg_cost[,side]&#10;AAPL,10,180.5&#10;RELIANCE.NS,20,2900"></textarea>
+  <div class="dim" style="font-size:11px;margin-top:8px">Edit quantity or cost directly in the table; changes save instantly. Click a row to research it.</div>
 </div></div>
+
+<!-- plan analysis -->
+<div class="modal-bg" id="anaModal"><div class="modal amodal"><div id="anaBody"></div></div></div>
+
+<!-- single-monitor research popup -->
+<div class="overlay" id="resOverlay"><div class="frame"><button class="btn sm x" id="resClose">✕ Close (Esc)</button><iframe id="resFrame" title="Research"></iframe></div></div>
 
 <div class="mkpop" id="mkpop"></div>
 
-<script src="/js/common.js"></script>
-<script src="/js/command.js"></script>
+<script src="/js/common.js?v=4"></script>
+<script src="/js/command.js?v=4"></script>
 </body>
 </html>

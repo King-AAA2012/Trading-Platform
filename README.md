@@ -65,6 +65,66 @@ include Majors, Europe, Asia, Emerging and Multi-asset (up to 12 markets). The *
 explanations and reports** all use this selection. Positions are sized in your currency with live FX, and the plan
 shows the split by market.
 
+## Portfolio engine: the investment committee
+
+**Build plan** runs a six-stage pipeline (`backend/planner.py`, `agents.py`, `optimizer.py`):
+
+1. **Screen:** every stock in your portfolio markets is scored. The best ideas plus everything you hold go forward, after
+   sector exclusions and a minimum market cap.
+2. **Gather:** fundamentals, analyst data, a year of daily prices, volatility, drawdown, Sharpe, trend quality and beta.
+3. **Debate:** ten agents argue every candidate: Trend Follower, Momentum Hunter, Mean-Reversion Trader, Value Investor,
+   Quality & Growth Analyst, Risk Manager, Macro Strategist, Quant Statistician, Street Sentiment Tracker and a
+   **Devil's Advocate** that attacks the majority view. Round 2 lets unsure agents update. A judge weighs the votes by your
+   horizon, your style and the market regime, and reports consensus, **conviction** and the best bull and bear cases.
+4. **Optimise:** expected returns come from consensus × conviction. Covariance uses Ledoit-Wolf shrinkage. Weights
+   maximise your chosen goal (Sharpe, lowest volatility, highest return, risk parity or a balanced blend) under:
+   - your max-per-position limit
+   - a per-trade risk cap (loss at the ATR stop ≤ your risk %)
+   - sector caps and market caps
+   - your cash reserve
+   - your target volatility
+
+   If this mix would have broken your drawdown limit last year, exposure is scaled down.
+5. **Trade list:** target weights become share counts in your currency. They're compared with your holdings using a
+   rebalance band to avoid churn, and new buys respect the daily limit (the rest is queued).
+6. **Stress-test:** a 2008-style crash, a +2pp rate shock, a +60% oil spike, a tech bust and a +10% dollar surge, plus
+   **2,000 Monte Carlo years**, VaR/CVaR, diversification ratio, effective positions, correlation, beta and each
+   holding's share of total risk. Open **📊 Committee & risk** to read every agent's argument.
+
+## Strategy settings
+
+Presets are Safe, Balanced and Aggressive; changing any value switches to Custom. The settings are:
+
+- risk per trade (%)
+- max drawdown (%)
+- target volatility (%)
+- max per position (%) and max per sector (%)
+- max positions
+- cash reserve (%)
+- holding horizon
+- optimiser goal
+- style (growth, value, dividend, momentum, quality, defensive)
+- minimum committee conviction
+- stop distance (× ATR)
+- rebalance band
+- minimum market cap
+- sectors to exclude
+- daily investment limit
+- shorts and fractional shares
+
+## Holdings
+
+The **💼 Holdings** screen shows live prices, value in your currency, P/L, today's move, weight, the engine's signal and a
+stop for each position. Quantity and cost can be edited inline and save instantly. It also has CSV import and export, and
+a search box with autocomplete. Every plan action has a **✓ Add to holdings** (or **✓ Record sale**) button, plus an
+**Add all** button. This is bookkeeping only; nothing is ever traded.
+
+## One monitor or two
+
+TradeScope detects your screens. With two monitors, double-clicking any stock opens the Research screen on the second
+one. With one monitor it opens as a full popup over the Command screen (Esc closes it). Click selects; double-click
+opens.
+
 ## What-If Lab 🔮
 
 Type any event ("China invades Taiwan", "Fed cuts 1%", "oil hits $150", "AI boom doubles data-center capex"):

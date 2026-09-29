@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TradeScope · Research</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%239b7bff'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none'/></svg>">
-<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/app.css?v=4">
+<style>body.embed header.top .brand, body.embed #reportBtn { display: none; } body.embed .app.research { grid-template-rows: 46px 1fr; }</style>
 <style>
   .grid.res { grid-template-columns: minmax(0, 1fr) 470px; }
   .quote { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
@@ -71,12 +72,19 @@
       <section class="panel" style="flex:1">
         <div class="ph"><div class="tabs" id="rtabs"><button data-t="why" class="on">Why</button><button data-t="fund">Fundamentals</button><button data-t="bt">Backtest</button><button data-t="news">News</button><button data-t="ai">✨ AI Analyst</button></div></div>
         <div class="pb" id="tabBody"></div>
+        <div id="aiFooter" style="display:none;padding:8px 12px 10px;border-top:1px solid var(--line);background:var(--panel)">
+          <div style="display:flex;gap:6px;align-items:flex-end">
+            <textarea id="ask" class="in" rows="2" style="resize:none" placeholder="Ask the AI analyst anything… (Enter to send · Shift+Enter for a new line)"></textarea>
+            <button class="btn primary" id="askBtn" style="height:48px">Ask</button>
+          </div>
+          <div class="dim" id="askHint" style="font-size:11px;margin-top:4px">Runs on your PC with Ollama. The first answer can take 20–60 seconds while the model loads.</div>
+        </div>
       </section>
     </div>
   </main>
 </div>
 <script src="/vendor/lwc.js"></script>
-<script src="/js/common.js"></script>
-<script src="/js/research.js"></script>
+<script src="/js/common.js?v=4"></script>
+<script src="/js/research.js?v=4"></script>
 </body>
 </html>

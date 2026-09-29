@@ -19,7 +19,8 @@ def sma(x: np.ndarray, n: int) -> np.ndarray:
     c = np.cumsum(np.insert(x, 0, 0.0))
     out = np.full_like(x, np.nan, dtype=float)
     out[n - 1:] = (c[n:] - c[:-n]) / n
-    out[:n - 1] = c[1:n] / np.arange(1, n)       # expanding mean for the warm-up
+    m = min(n - 1, len(x))
+    out[:m] = c[1:m + 1] / np.arange(1, m + 1)   # expanding mean for the warm-up (also covers series shorter than n)
     return out
 
 
