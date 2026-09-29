@@ -80,6 +80,11 @@
     document.querySelectorAll("tr.row").forEach((r) => r.classList.toggle("sel", r.dataset.s === symbol));
   }
 
+  // bridge for command-extra.js
+  window.CMD = { get state() { return state; }, get scan() { return scan; }, get markets() { return markets; }, get plan() { return lastPlan; },
+    select: (s) => select(s), openDetail: (s) => openDetail(s), loadScan: (f) => loadScan(f), renderRows: () => renderRows(), bindRows: (r, s) => bindRows(r, s),
+    renderWatch: () => renderWatch(), refreshHoldings: () => refreshHoldings(), saveProfile: (p, c) => saveProfile(p, c), visibleRows: [] };
+
   // ---------------- init
   async function init() {
     [state, { markets, risk: riskCfg }, presets] = await Promise.all([api("/api/state"), api("/api/markets"), api("/api/presets")]);
@@ -170,11 +175,14 @@
   document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => {
     tab = b.dataset.t;
     document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
-    const isWi = tab === "whatif";
+    const isWi = tab === "whatif", isMk = tab === "markets";
     $("#whatif").style.display = isWi ? "" : "none";
-    document.querySelectorAll(".scan-only").forEach((el) => (el.style.display = isWi ? "none" : ""));
-    ["#filter", "#refresh", "#scanInfo"].forEach((s) => ($(s).style.visibility = isWi ? "hidden" : ""));
+    $("#overview").style.display = isMk ? "" : "none";
+    document.querySelectorAll(".scan-only").forEach((el) => (el.style.display = isWi || isMk ? "none" : ""));
+    if (!isWi && !isMk && window.CX) CX.syncFilterBar();
+    ["#filter", "#refresh", "#scanInfo"].forEach((s) => ($(s).style.visibility = isWi || isMk ? "hidden" : ""));
     if (isWi) { renderWhatIf(); return; }
+    if (isMk) { CX.renderOverview(); return; }
     sortKey = "score"; sortDir = tab === "short" ? 1 : -1;
     renderRows();
   }));
@@ -188,7 +196,9 @@
   function renderRows() {
     if (!scan) return;
     const f = $("#filter").value.toLowerCase();
-    let rows = scan.rows.filter((r) => (tab === "all" || (tab === "long" ? r.score > 0 : r.score < 0)) && (!f || (r.symbol + r.name + r.setup + (r.sector || "")).toLowerCase().includes(f)));
+    const cf = window.CX && CX.filter;
+    let rows = scan.rows.filter((r) => (tab === "all" || (tab === "long" ? r.score > 0 : r.score < 0)) && (!f || (r.symbol + r.name + r.setup + (r.sector || "")).toLowerCase().includes(f)) && (!cf || cf(r)));
+    window.CMD.visibleRows = rows;
     const val = (r) => (sortKey === "sizing" ? r.sizing.cost : r[sortKey]);
     rows.sort((a, b) => { const x = val(a), y = val(b); return (typeof x === "string" ? x.localeCompare(y) : (x ?? -1e9) - (y ?? -1e9)) * sortDir; });
     const ccy = state.profile.currency;
@@ -211,7 +221,7 @@
 
   // ---------------- watchlist
   async function renderWatch() {
-    const wl = state.watchlist || [];
+    const wl = (window.CX && CX.currentList()) || state.watchlist || [];
     if (!wl.length) { $("#wl").innerHTML = `<tr><td class="empty">Empty. Select a symbol and press "＋ selected".</td></tr>`; return; }
     const q = await api("/api/quotes?symbols=" + encodeURIComponent(wl.join(","))).catch(() => []);
     $("#wl").innerHTML = q.map((x) => `<tr class="row" data-s="${esc(x.symbol)}"><td><div class="sym">${esc(disp(x.symbol))}<small>${esc(x.name)}</small></div></td>
@@ -220,8 +230,11 @@
     bindRows($("#wl"), "tr.row");
     $("#wl").querySelectorAll("[data-rm]").forEach((b) => (b.onclick = () => saveWatch(wl.filter((s) => s !== b.dataset.rm))));
   }
-  async function saveWatch(list) { state.watchlist = list; await api("/api/state", { body: { watchlist: list } }); renderWatch(); TS.send({ type: "watch", watchlist: list }); }
-  $("#wlAdd").onclick = () => { if (selected && !state.watchlist.includes(selected)) saveWatch([...state.watchlist, selected]); };
+  async function saveWatch(list) {
+    if (window.CX && CX.listName() !== "Main") { await CX.saveList(list); renderWatch(); return; }
+    state.watchlist = list; await api("/api/state", { body: { watchlist: list } }); renderWatch(); TS.send({ type: "watch", watchlist: list });
+  }
+  $("#wlAdd").onclick = () => { const cur = (window.CX && CX.currentList()) || state.watchlist; if (selected && !cur.includes(selected)) saveWatch([...cur, selected]); };
 
   // ---------------- strategy settings (risk as %, plus the optimiser's parameters)
   let presets = { presets: {}, defaults: {}, sectors: [] };
@@ -236,6 +249,8 @@
     });
     document.querySelectorAll("[data-r]").forEach((r) => (r.value = p[r.dataset.r] ?? r.value));
     document.querySelectorAll("#presets button").forEach((b) => b.classList.toggle("on", b.dataset.p === (presets.presets[state.profile.risk] ? state.profile.risk : "custom")));
+    const score = state.profile.riskScore ?? { conservative: 25, balanced: 50, aggressive: 75 }[state.profile.risk] ?? 50;
+    $("#riskDial").value = score; $("#riskNum").textContent = Math.round(score); $("#riskLbl").textContent = riskLabel(score);
     const ex = new Set(p.excludeSectors || []);
     $("#exSectors").innerHTML = presets.sectors.map((s) => `<span class="chip ${ex.has(s) ? "on" : ""}" data-sec="${esc(s)}" style="${ex.has(s) ? "border-color:var(--down);color:var(--down);text-decoration:line-through" : ""}">${esc(s)}</span>`).join("");
     $("#exSectors").querySelectorAll("[data-sec]").forEach((c) => (c.onclick = () => {
@@ -265,15 +280,38 @@
   document.querySelectorAll("#presets button").forEach((b) => (b.onclick = () => {
     const pr = presets.presets[b.dataset.p];
     if (!pr) return saveProfile({ risk: "custom" }, true);
-    saveProfile({ ...pr, risk: b.dataset.p });
+    saveProfile({ ...pr, risk: b.dataset.p, riskScore: { conservative: 25, balanced: 50, aggressive: 75 }[b.dataset.p] });
   }));
+  // ---- one 0-100 risk dial drives every parameter (interpolated between anchor profiles)
+  const riskLabel = (v) => (v < 15 ? "Very safe" : v < 35 ? "Safe" : v < 55 ? "Moderate" : v < 75 ? "Growth" : v < 90 ? "Aggressive" : "Very aggressive");
+  function riskParams(v) {
+    const P = presets.presets;
+    const anchors = [
+      [0, { riskPerTrade: 0.25, targetVol: 6, maxDrawdown: 8, maxPosition: 8, maxSector: 20, maxPositions: 20, minPositions: 10, cashReserve: 30, minConviction: 35, stopAtr: 3, rebalanceBand: 2, objective: "minvol", horizon: "long", style: "defensive" }],
+      [25, P.conservative], [50, P.balanced], [75, P.aggressive],
+      [100, { riskPerTrade: 3.5, targetVol: 40, maxDrawdown: 50, maxPosition: 35, maxSector: 60, maxPositions: 5, minPositions: 3, cashReserve: 0, minConviction: 15, stopAtr: 1.6, rebalanceBand: 5, objective: "return", horizon: "short", style: "momentum" }],
+    ];
+    let i = 0;
+    while (i < anchors.length - 2 && v > anchors[i + 1][0]) i++;
+    const [v0, a] = anchors[i], [v1, b] = anchors[i + 1], f = (v - v0) / (v1 - v0);
+    const out = {};
+    for (const k of Object.keys(b)) {
+      if (typeof b[k] === "number") {
+        const x = a[k] + (b[k] - a[k]) * f;
+        out[k] = ["maxPositions", "minPositions", "maxSector", "maxPosition", "maxDrawdown", "targetVol", "cashReserve", "minConviction"].includes(k) ? Math.round(x) : +x.toFixed(2);
+      } else out[k] = f < 0.5 ? a[k] : b[k];
+    }
+    return out;
+  }
+  $("#riskDial").addEventListener("input", () => { const v = +$("#riskDial").value; $("#riskNum").textContent = v; $("#riskLbl").textContent = riskLabel(v); });
+  $("#riskDial").addEventListener("change", () => { const v = +$("#riskDial").value; saveProfile({ ...riskParams(v), riskScore: v, risk: "score" }); });
   document.querySelectorAll("[data-k]").forEach((el) => el.addEventListener("change", () => {
     const k = el.dataset.k;
     let v = el.type === "checkbox" ? el.checked : el.value;
     if (numKeys.has(k)) v = v === "" ? null : +v;
     const r = document.querySelector(`[data-r="${k}"]`);
     if (r && v != null) r.value = v;
-    saveProfile({ [k]: v }, !["budget", "currency", "cash", "dailyLimit", "allowShorts", "fractional"].includes(k));
+    saveProfile({ [k]: v, ...(["budget", "currency", "cash", "dailyLimit", "allowShorts", "fractional"].includes(k) ? {} : { riskScore: null }) }, !["budget", "currency", "cash", "dailyLimit", "allowShorts", "fractional"].includes(k));
   }));
   document.querySelectorAll("[data-r]").forEach((r) => r.addEventListener("input", () => {
     const n = document.querySelector(`[data-k="${r.dataset.r}"]`); n.value = r.value;
@@ -344,6 +382,8 @@
       ex.avgCost = ex.avgCost && cost ? +(((ex.avgCost * ex.qty) + cost * qty) / tq).toFixed(6) : ex.avgCost || cost;
       ex.qty = +tq.toFixed(6);
     } else hs.push({ symbol, qty, avgCost: cost, side, added: Math.floor(Date.now() / 1000) });
+    state.journal = [...(state.journal || []), { t: Math.floor(Date.now() / 1000), symbol, action: side === "short" ? "SHORT" : "BUY", qty, price: cost, value: cost ? cost * qty : null, realized: null, manual: true }];
+    api("/api/state", { body: { journal: state.journal } });
     return saveHoldings(hs);
   }
   $("#haAdd").onclick = async () => {

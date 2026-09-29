@@ -307,7 +307,7 @@ def build(rows: list[dict], hists: dict[str, dict], holdings: list[dict], held: 
             e = votes_summary.setdefault(v["agent"], {"agent": v["agent"], "bull": 0, "bear": 0, "abstain": 0})
             e["bull" if v["stance"] > 0.15 else "bear" if v["stance"] < -0.15 else "abstain"] += 1
     return {
-        "currency": ccy, "profile": profile.get("risk", "custom").capitalize(), "params": P, "equity": equity, "cashStart": cash, "cashEnd": cash_now,
+        "currency": ccy, "profile": (f"Risk {profile['riskScore']:.0f}/100" if profile.get("riskScore") is not None else profile.get("risk", "custom").capitalize()), "params": P, "equity": equity, "cashStart": cash, "cashEnd": cash_now,
         "invested": sum(v for _, v in alloc), "positions": len([a for a in alloc_out if a["symbol"] != "CASH"]), "actions": actions,
         "allocation": alloc_out, "sectors": sorted(({"sector": k, "value": v} for k, v in sectors.items()), key=lambda x: -x["value"]),
         "byMarket": sorted(({"market": k, "value": v} for k, v in markets_.items()), key=lambda x: -x["value"]),

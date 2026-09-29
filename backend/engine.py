@@ -312,6 +312,8 @@ def evaluate(b: dict, bench: dict | None = None, shortable: bool = True, fund: d
         "pos52": float(ind["pos52"][i]), "hitRate": (bt["longs"] if sgn > 0 else bt["shorts"]).get("hit") if bt.get("ok") else None,
         "backtestN": (bt["longs"] if sgn > 0 else bt["shorts"]).get("n") if bt.get("ok") else 0,
         "spark": np.round(c[-60:], 4).tolist(),
+        "above200": bool(price > float(ind["e200"][i])), "newHigh52": bool(price >= float(ind["hi52"][i]) * 0.995),
+        "newLow52": bool(price <= float(ind["lo52"][i]) * 1.005),
     }
     out["reasons"] = reasons(out, f, ind, i, bench is not None and f["relative"] is not None, fparts)
     out["risks"] = risks(out, ind, i, fund or {})

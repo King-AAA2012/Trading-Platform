@@ -13,6 +13,11 @@ DEFAULT = {
     "watchlist": ["AAPL", "NVDA", "MSFT", "RELIANCE.NS", "BTC-USD", "GC=F"],
     "lastMarket": "us",
     "planMarkets": ["us"],
+    "watchlists": {},      # extra named watchlists {name: [symbols]}
+    "alerts": [],          # {id, symbol, kind: above|below|score_above|score_below, value, note, active, triggered}
+    "journal": [],         # recorded trades {t, symbol, action, qty, price, value, realized}
+    "notes": {},           # {symbol: text}
+    "screens": {},         # saved screener filters {name: {...}}
 }
 
 

@@ -11,7 +11,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, data, engine, markets, planner, portfolio, scenario, store
+from . import ai, data, engine, extras, markets, optimizer, planner, portfolio, scenario, store
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONT = ROOT / "frontend"
@@ -93,6 +93,7 @@ def analyze(symbol: str, market: str | None = None, full: bool = True) -> dict:
     a["industry"] = (fund or {}).get("industry") or info["industry"]
     a["marketName"] = md["name"]
     a["exchange"] = b["meta"].get("exchange", "")
+    a["stale"] = bool(b["meta"].get("stale"))
     return a
 
 
@@ -214,7 +215,7 @@ def api_state_save(patch: dict = Body(...)):
     st = store.load()
     if "profile" in patch and patch["profile"].get("allowShorts") != st["profile"].get("allowShorts"):
         _scan_cache.clear()  # backtest/confidence depend on whether shorts are allowed
-    for k in ("profile", "holdings", "watchlist", "lastMarket", "planMarkets"):
+    for k in ("profile", "holdings", "watchlist", "lastMarket", "planMarkets", "watchlists", "alerts", "journal", "notes", "screens"):
         if k in patch:
             st[k] = patch[k]
     store.save(st)
@@ -336,7 +337,11 @@ def api_holdings_apply(body: dict = Body(...)):
                 hs[s] = {"symbol": s, "qty": qty, "avgCost": px, "side": side, "added": int(time.time())}
             if prof.get("cash") not in (None, ""):
                 prof["cash"] = max(0.0, float(prof["cash"]) - float(a.get("value") or 0))
+            st.setdefault("journal", []).append({"t": int(time.time()), "symbol": s, "action": act, "qty": qty, "price": px, "value": a.get("value"), "realized": None})
         elif act in ("SELL", "COVER", "TRIM") and h:
+            sgn = 1 if h.get("side", "long") == "long" else -1
+            realized = (px - (h.get("avgCost") or px)) * min(qty, float(h["qty"])) * sgn
+            st.setdefault("journal", []).append({"t": int(time.time()), "symbol": s, "action": act, "qty": qty, "price": px, "value": a.get("value"), "realized": realized})
             left = float(h["qty"]) - qty
             if left <= 1e-9:
                 hs.pop(s)
@@ -400,6 +405,146 @@ def api_scenario_run(body: dict = Body(...)):
               "markets": [markets.market_def(m)["name"] for m in mkts], "rows": out, "levels": scenario.driver_levels()})
 
 
+# ---------------------------------------------------------------- deep dives, market overview, tools
+def _peers_for(symbol: str, sector: str | None) -> list[dict]:
+    for _, rows, _ in _scan_cache.values():
+        if any(r["symbol"] == symbol for r in rows):
+            return [r for r in rows if r.get("sector") == sector and r["symbol"] != symbol]
+    return []
+
+
+@app.get("/api/extras/{symbol:path}")
+def api_extras(symbol: str, market: str | None = None):
+    a = analyze(symbol, market)
+    b = data.get_history(symbol, "5y")
+    return J(extras.stock_extras(symbol, a, b, _peers_for(symbol, a.get("sector"))))
+
+
+@app.get("/api/overview")
+def api_overview(market: str = "us"):
+    return J(data.cached(f"overview:{market}", 300, lambda: _overview(market)))
+
+
+def _overview(market: str):
+    try:
+        rows, _ = run_scan(market)
+    except Exception:
+        rows = []
+    try:
+        us_rows, _ = run_scan("us")
+    except Exception:
+        us_rows = rows
+    return clean({"fearGreed": extras.fear_greed(us_rows), "yieldCurve": extras.yield_curve(), "currencies": extras.currency_strength(),
+                  "indices": extras.world_indices(), "sectors": extras.sector_rotation(rows), "breadth": extras.breadth(rows), "movers": extras.movers(rows),
+                  "market": markets.market_def(market)["name"]})
+
+
+@app.get("/api/news/market")
+def api_news_market():
+    return J(data.news("^GSPC", "stock market today"))
+
+
+@app.get("/api/fx")
+def api_fx(frm: str, to: str):
+    return J({"from": frm.upper(), "to": to.upper(), "rate": data.fx_rate(frm, to)})
+
+
+@app.get("/api/compare")
+def api_compare(symbols: str, days: int = 252):
+    syms = [s.strip() for s in symbols.split(",") if s.strip()][:6]
+    hists = {s: h for s, h in zip(syms, data.POOL.map(lambda s: data.get_history(s, "5y"), syms)) if h}
+    R, ok, grid = optimizer.align(hists, syms, days)
+    if not ok:
+        raise HTTPException(404, "no data")
+    eq = np.exp(np.cumsum(R, axis=0))
+    stats = []
+    for j, s in enumerate(ok):
+        r = R[:, j]
+        vol = float(r.std() * np.sqrt(252))
+        e = eq[:, j]
+        stats.append({"symbol": s, "name": hists[s]["meta"]["name"], "ret": float(e[-1] - 1), "vol": vol, "sharpe": float(r.mean() * 252 / (vol + 1e-9)),
+                      "maxdd": float(np.min(e / np.maximum.accumulate(e) - 1))})
+    corr = np.corrcoef(R.T).tolist() if len(ok) > 1 else [[1.0]]
+    step = max(1, len(grid) // 300)
+    return J({"symbols": ok, "t": (grid[::step] * 86400).tolist(), "series": {s: np.round(eq[::step, j], 4).tolist() for j, s in enumerate(ok)}, "stats": stats, "corr": corr})
+
+
+@app.post("/api/backtest/weights")
+def api_backtest(body: dict = Body(...)):
+    """Backtest fixed target weights with periodic rebalancing against the S&P 500."""
+    w = {k: float(v) for k, v in body.get("weights", {}).items() if float(v) != 0}
+    days = int(body.get("days", 756))
+    reb = int(body.get("rebalance", 21))
+    syms = list(w) + ["^GSPC"]
+    hists = {s: h for s, h in zip(syms, data.POOL.map(lambda s: data.get_history(s, "5y"), syms)) if h}
+    R, ok, grid = optimizer.align(hists, syms, days)
+    if "^GSPC" not in ok or len(ok) < 2:
+        raise HTTPException(404, "not enough data")
+    bi = ok.index("^GSPC")
+    names = [s for s in ok if s != "^GSPC"]
+    tw = np.array([w[s] for s in names])
+    idx = [ok.index(s) for s in names]
+    Rs = np.expm1(R[:, idx])
+    val, hold, cash = 1.0, tw.copy(), 1.0 - tw.sum()
+    curve = []
+    for i in range(len(Rs)):
+        if i % reb == 0:                 # rebalance back to target weights; the unallocated part sits in cash
+            hold, cash = tw * val, (1 - tw.sum()) * val
+        hold = hold * (1 + Rs[i])
+        val = hold.sum() + cash
+        curve.append(val)
+    curve = np.array(curve)
+    bench = np.exp(np.cumsum(R[:, bi]))
+    yrs = len(curve) / 252
+
+    def st(e):
+        r = np.diff(np.log(np.concatenate([[1.0], e])))
+        return {"total": float(e[-1] - 1), "cagr": float(e[-1] ** (1 / yrs) - 1), "vol": float(r.std() * np.sqrt(252)),
+                "sharpe": float(r.mean() * 252 / (r.std() * np.sqrt(252) + 1e-9)), "maxdd": float(np.min(e / np.maximum.accumulate(e) - 1))}
+    step = max(1, len(curve) // 300)
+    return J({"t": (grid[::step] * 86400).tolist(), "portfolio": np.round(curve[::step], 4).tolist(), "benchmark": np.round(bench[::step], 4).tolist(),
+              "stats": st(curve), "benchStats": st(bench), "years": round(yrs, 1), "symbols": names})
+
+
+@app.get("/api/holdings/analytics")
+def api_holdings_analytics():
+    st = store.load()
+    summ = json.loads(api_holdings_summary().body)
+    rows = [r for r in summ["rows"] if r.get("value")]
+    if not rows:
+        return J({"empty": True})
+    tot = sum(abs(r["value"]) for r in rows)
+    syms = [r["symbol"] for r in rows]
+    hists = {s: h for s, h in zip(syms, data.POOL.map(lambda s: data.get_history(s, "2y"), syms)) if h}
+    R, ok, _ = optimizer.align(hists, syms)
+    out = {"breakdown": {}, "dividends": 0.0}
+    for key in ("sector", "quoteCurrency"):
+        g = {}
+        for r in rows:
+            g[r.get(key) or "Other"] = g.get(r.get(key) or "Other", 0) + abs(r["value"])
+        out["breakdown"][key] = sorted(({"name": k, "value": v, "weight": v / tot} for k, v in g.items()), key=lambda x: -x["value"])
+    for r, f in zip(rows, data.POOL.map(lambda r: data.fundamentals(r["symbol"]), rows)):
+        dy = (f or {}).get("dividendYield")
+        if dy:
+            out["dividends"] += dy * abs(r["value"])
+    if ok:
+        w = np.array([next(r["value"] for r in rows if r["symbol"] == s) / tot for s in ok])
+        S = optimizer.ledoit_wolf(R)
+        mu = R.mean(0) * 252
+        spx = data.get_history("^GSPC", "2y")
+        bench = None
+        if spx:
+            Rb, sb, _ = optimizer.align({**hists, "^GSPC": spx}, ok + ["^GSPC"])
+            if sb and sb[-1] == "^GSPC" and len(Rb) == len(R):
+                bench = Rb[:, -1]
+        ana = optimizer.analytics(w, R, mu, S, bench, 20, float(st["profile"].get("maxDrawdown") or 20) / 100)
+        ana["symbols"] = ok
+        out["risk"] = ana
+    out["journal"] = st.get("journal", [])[-100:][::-1]
+    out["realized"] = sum(j.get("realized") or 0 for j in st.get("journal", []))
+    return J(out)
+
+
 # ---------------------------------------------------------------- AI
 @app.get("/api/ai/status")
 def api_ai_status():
@@ -461,6 +606,55 @@ def api_ai_plan(body: dict = Body(...)):
               + f"Profile: {plan['profile']}, equity {plan['equity']:,.0f} {plan['currency']}, cash after plan {plan['cashEnd']:,.0f}, "
               f"total risk at stops {plan['totalRisk']:,.0f}.\nActions:\n{acts}\nSectors: {json.dumps(plan['sectors'])}")
     fb = "## Today's game plan\n" + acts + f"\n\nCash after plan: {plan['cashEnd']:,.2f} {plan['currency']}. *(Start Ollama for an AI explanation.)*"
+    return _text_stream(ai.stream([{"role": "user", "content": prompt}]), fb)
+
+
+@app.post("/api/ai/why")
+def api_ai_why(body: dict = Body(...)):
+    sym = body["symbol"]
+    a = analyze(sym, body.get("market"), full=False)
+    nw = data.news(sym, a["name"])[:10]
+    heads = "\n".join(f"- {n['title']} ({n.get('publisher')})" for n in nw if n.get("title"))
+    prompt = (f"{a['name']} ({sym}) moved {a['changePct']:+.2f}% today; 1-month {ai.pct(a['ret1m'])}, 3-month {ai.pct(a['ret3m'])}. "
+              f"Engine signal {a['signal']} ({a['score']:+.0f}), RSI {a['rsi']:.0f}, volatility {a['atrPct'] * 100:.1f}%/day.\nRecent headlines:\n{heads}\n\n"
+              "In markdown: '## Why it's moving' (most likely drivers from the headlines; say plainly if the headlines don't explain it), "
+              "'## Is the move significant?' (compare today's move with its normal daily range) and '## What to watch next'. Use only this data.")
+    fb = f"## Why it's moving\nToday {a['changePct']:+.2f}% (typical daily move {a['atrPct'] * 100:.1f}%).\n\n**Recent headlines**\n{heads or '- none found'}\n\n*(Start Ollama for an AI explanation.)*"
+    return _text_stream(ai.stream([{"role": "user", "content": prompt}]), fb)
+
+
+@app.post("/api/ai/compare")
+def api_ai_compare(body: dict = Body(...)):
+    syms = body["symbols"][:4]
+    ctx = []
+    for s in syms:
+        try:
+            a = analyze(s)
+            f = a.get("fundamentals") or {}
+            ctx.append(f"{s} ({a['name']}): signal {a['signal']} {a['score']:+.0f}, conf {a['confidence']:.0f}%, 3m {ai.pct(a['ret3m'])}, 1y {ai.pct(a['ret1y'])}, "
+                       f"vol {a['atrPct'] * 100:.1f}%/day, P/E {f.get('trailingPE')}, fwd P/E {f.get('forwardPE')}, rev growth {f.get('revenueGrowth')}, "
+                       f"margin {f.get('profitMargin')}, D/E {f.get('debtToEquity')}, analyst target {f.get('targetMean')}")
+        except HTTPException:
+            pass
+    prompt = ("Compare these instruments for an investor in markdown: '## Head to head' (a compact table), '## Strengths and weaknesses', "
+              "'## Which fits which investor' and '## Verdict'. Use only this data:\n" + "\n".join(ctx))
+    return _text_stream(ai.stream([{"role": "user", "content": prompt}]), "\n".join(ctx) + "\n\n*(Start Ollama for an AI comparison.)*")
+
+
+@app.post("/api/ai/briefing")
+def api_ai_briefing(body: dict = Body(default={})):
+    ov = json.loads(api_overview(body.get("market", "us")).body)
+    nw = data.news("^GSPC", "stock market today")[:10]
+    fg = ov["fearGreed"]
+    prompt = (f"Write today's market briefing in markdown with sections '## The big picture', '## What's moving', '## Rates, dollar & commodities', "
+              f"'## Sentiment' and '## What to watch'. Fear & greed {fg['score']} ({fg['label']}): " + "; ".join(f"{c['name']} {c['detail']}" for c in fg["components"])
+              + f". Yield curve: {json.dumps(ov['yieldCurve'])}. Currency strength (1M): " + ", ".join(f"{c['ccy']} {c['1M']}" for c in ov["currencies"])
+              + ". World indices (day/1M): " + ", ".join(f"{i['name']} {i['day']}/{i['1M']}" for i in ov["indices"][:14])
+              + f". Sector rotation ({ov['market']}, 3M): " + ", ".join(f"{s['sector']} {s['3M']}" for s in ov["sectors"][:8])
+              + ". Top gainers: " + ", ".join(f"{m['symbol']} {m['changePct']:+.1f}%" for m in ov["movers"]["gainers"])
+              + ". Top losers: " + ", ".join(f"{m['symbol']} {m['changePct']:+.1f}%" for m in ov["movers"]["losers"])
+              + ".\nHeadlines:\n" + "\n".join(f"- {n['title']}" for n in nw if n.get("title")) + "\nUse only this data.")
+    fb = f"## Sentiment\nFear & greed: **{fg['score']} ({fg['label']})**\n\n" + "\n".join(f"- {c['name']}: {c['detail']}" for c in fg["components"]) + "\n\n*(Start Ollama for a full AI briefing.)*"
     return _text_stream(ai.stream([{"role": "user", "content": prompt}]), fb)
 
 

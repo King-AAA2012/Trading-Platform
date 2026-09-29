@@ -63,6 +63,9 @@
     topFillColor1: "rgba(31,210,134,.28)", topFillColor2: "rgba(31,210,134,.02)", bottomFillColor1: "rgba(255,84,112,.02)", bottomFillColor2: "rgba(255,84,112,.28)", lineWidth: 1.5, priceLineVisible: false });
   scoreS.createPriceLine({ price: 20, color: "#1fd28655", lineStyle: 2, axisLabelVisible: false });
   scoreS.createPriceLine({ price: -20, color: "#ff547055", lineStyle: 2, axisLabelVisible: false });
+  // bridge for research-extra.js (overlays, extra tabs, drawing, tools)
+  window.RES = { LW, cMain, candle, vol, all, line, base, get A() { return A; }, get sym() { return sym; }, get market() { return market; },
+    get state() { return state; }, set state(v) { state = v; }, get tf() { return tf; }, draw: () => draw(), setRange: () => setRange(), renderTab: () => renderTab() };
   let syncing = false;
   all.forEach((c) => c.timeScale().subscribeVisibleLogicalRangeChange((r) => {
     if (syncing || !r) return; syncing = true;
@@ -85,15 +88,17 @@
     mH.setData(t.map((x, i) => ({ time: x, value: s.macdh[i], color: s.macdh[i] >= 0 ? "rgba(31,210,134,.6)" : "rgba(255,84,112,.6)" })));
     mL.setData(S(t, s.macd)); mS.setData(S(t, s.macds));
     scoreS.setData(S(t, s.score));
-    candle.setMarkers($("#oSig").checked ? s.marks.map((m) => ({ time: m.t, position: m.type === "buy" ? "belowBar" : "aboveBar",
+    const extraMarks = (window.RX && RX.markers && RX.markers()) || [];
+    candle.setMarkers(($("#oSig").checked ? s.marks.map((m) => ({ time: m.t, position: m.type === "buy" ? "belowBar" : "aboveBar",
       color: m.type === "buy" ? "#1fd286" : m.type === "short" ? "#b9a4ff" : "#8791a6", shape: m.type === "buy" ? "arrowUp" : m.type === "short" ? "arrowDown" : "circle",
-      text: m.type === "buy" ? "BUY" : m.type === "short" ? "SHORT" : "EXIT" })) : []);
+      text: m.type === "buy" ? "BUY" : m.type === "short" ? "SHORT" : "EXIT" })) : []).concat(extraMarks).sort((a, b) => a.time - b.time));
     priceLines.forEach((p) => candle.removePriceLine(p)); priceLines = [];
     if ($("#oLv").checked && A.bias !== "neutral") {
       const L = A.levels, add = (price, color, title) => priceLines.push(candle.createPriceLine({ price, color, lineWidth: 1, lineStyle: 2, title }));
       add(L.stop, "#ff5470", "STOP"); add(L.t1, "#1fd286", "T1"); add(L.t2, "#1fd286", "T2"); add(L.entry, "#5b8cff", "ENTRY");
     }
     all.forEach((c) => c.applyOptions({ timeScale: { timeVisible: false } }));
+    if (window.RX && RX.afterDraw) RX.afterDraw(false);
     setRange();
   }
   function setRange() {
@@ -109,6 +114,7 @@
     [e20, e50, e200, bbu, bbl, rsiS, mL, mS, mH, scoreS, atrS, chand].forEach((x) => x.setData([]));
     candle.setMarkers([]);
     cMain.applyOptions({ timeScale: { timeVisible: true } });
+    if (window.RX && RX.afterDraw) RX.afterDraw(true, h);
     cMain.timeScale().fitContent();
   }
   function draw() { if (!A) return; tf === "1D" || tf === "5D" ? drawIntraday() : drawDaily(); }
@@ -143,13 +149,15 @@
       return;
     }
     document.title = `${disp(sym)} · TradeScope Research`;
-    renderQuote(); renderRec(); draw(); renderTab(); watchBtn();
+    renderQuote(); renderRec();
+    if (window.RX && RX.onLoad) await RX.onLoad(changed);
+    draw(); renderTab(); watchBtn();
   }
 
   function renderQuote() {
     $("#quote").innerHTML = `<h1>${esc(disp(A.symbol))}</h1><span class="nm">${esc(A.name)} · ${esc(A.exchange || A.marketName)}</span>
       <span class="px">${price(A.price)}</span><span class="num ${cls(A.changePct)}">${pct(A.changePct)}</span><span class="dim">${esc(A.currency)}</span>
-      <span class="sig ${TS.sigClass(A.signal)}">${A.signal}</span>`;
+      <span class="sig ${TS.sigClass(A.signal)}">${A.signal}</span>${A.stale ? '<span class="stale" data-tip="Yahoo was unreachable, so this uses the last saved copy of the price history">offline data</span>' : ""}`;
   }
 
   const ACTION = { "STRONG BUY": ["Strong Buy", "var(--up)"], BUY: ["Buy", "var(--up)"], HOLD: ["Hold / Wait", "#aab3c6"], SELL: ["Avoid / Reduce", "var(--down)"], "STRONG SELL": ["Avoid · Short candidate", "var(--down)"] };
@@ -189,7 +197,8 @@
   }));
   function renderTab() {
     $("#aiFooter").style.display = tab === "ai" ? "" : "none";
-    if (tab === "ai") return tabAi();                 // the AI works even before (or without) a loaded analysis
+    if (tab === "ai") return tabAi();
+    if (window.RX && RX.tabs && RX.tabs[tab]) return RX.tabs[tab]();                 // the AI works even before (or without) a loaded analysis
     if (A) ({ why: tabWhy, fund: tabFund, bt: tabBt, news: tabNews })[tab]();
   }
 
@@ -251,9 +260,15 @@
   function tabAi() {
     const name = A ? disp(A.symbol) : sym ? disp(sym) : "the market";
     $("#tabBody").innerHTML = `<div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn primary" id="genReport" ${A ? "" : "disabled"}>✨ Generate AI research note</button><span class="spacer"></span><span class="dim" style="font-size:11px;align-self:center">runs 100% locally</span></div>
+      <div class="qchips">${["⚡ Why is it moving today?", "⚖️ Bull case vs bear case", "🏦 Good long-term hold?", "🧒 Explain it simply", "👥 How does it compare with peers?", "💰 How much should I buy?"].map((q) => `<span class="chip" data-q="${esc(q)}">${esc(q)}</span>`).join("")}</div>
       <div id="aiOut" class="md">${aiReport ? TS.md(aiReport) : `<div class="muted">Ask anything about ${esc(name)}: whether it's a good long-term hold, what the risks are, how it compares with peers, or how much to buy. The AI sees everything the engine computed plus the latest headlines and your budget.</div>`}</div>
       <div id="chat" style="margin-top:14px;display:flex;flex-direction:column;gap:8px">${chat.map((m) => `<div class="msg ${m.role} md">${TS.md(m.content)}</div>`).join("")}${pending ? `<div class="msg assistant md cursor" id="pending">${pending.text ? TS.md(pending.text) : `<span class="muted">Thinking… ${pending.secs}s</span>`}</div>` : ""}</div>`;
     $("#ask").placeholder = `Ask about ${name}… (Enter to send · Shift+Enter for a new line)`;
+    document.querySelectorAll("#tabBody [data-q]").forEach((c) => (c.onclick = () => {
+      const q = c.dataset.q;
+      if (q.startsWith("⚡")) return window.RES.aiOutStream("/api/ai/why", { symbol: sym, market });
+      window.RES.ask(q.replace(/^\S+\s/, "") + (q.startsWith("🧒") ? " Use very simple words, like explaining to a beginner." : ""));
+    }));
     $("#genReport").onclick = async () => {
       const out = $("#aiOut"); out.classList.add("cursor"); out.innerHTML = `<span class="muted">Writing the note…</span>`;
       try { aiReport = await TS.stream("/api/ai/report", { symbol: sym, market }, (t) => { if ($("#aiOut")) $("#aiOut").innerHTML = TS.md(t); }); }
@@ -285,6 +300,14 @@
     box.focus();
   }
   $("#askBtn").onclick = ask;
+  window.RES.ask = (q) => { $("#ask").value = q; ask(); };
+  window.RES.aiOutStream = async (path, body) => {
+    if (tab !== "ai") document.querySelector('#rtabs button[data-t="ai"]').click();
+    const out = $("#aiOut"); out.classList.add("cursor"); out.innerHTML = '<span class="muted">Thinking…</span>';
+    try { aiReport = await TS.stream(path, body, (t) => { if ($("#aiOut")) $("#aiOut").innerHTML = TS.md(t); }); }
+    catch (e) { if ($("#aiOut")) $("#aiOut").innerHTML = `<div class="down">AI request failed: ${esc(e.message)}</div>`; }
+    $("#aiOut")?.classList.remove("cursor");
+  };
   $("#ask").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); } });
 
   // ---------------- watch + report

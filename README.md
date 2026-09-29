@@ -125,6 +125,71 @@ TradeScope detects your screens. With two monitors, double-clicking any stock op
 one. With one monitor it opens as a full popup over the Command screen (Esc closes it). Click selects; double-click
 opens.
 
+## Feature list
+
+**Risk & settings**
+- One **risk level dial (0–100)** that sets every risk rule. Any single rule can still be fine-tuned under Advanced.
+- Custom tooltips on every ⓘ and button that work in any browser. Light and dark themes, compact density,
+  keyboard shortcuts (press `?`), a searchable glossary of 41 terms and a guided tour.
+
+**Research charts**
+- Chart styles: candles, Heikin-Ashi, line, area, and a log scale.
+- Overlays:
+  - EMA 20/50/200 and SMA 50/200
+  - Supertrend and Parabolic SAR
+  - Bollinger, Keltner and Donchian channels
+  - pivot points, auto support/resistance, Fibonacci levels and 52-week high/low
+  - engine signals and 10 candlestick patterns
+  - a 3-month volatility cone and a benchmark comparison line
+- Panes you can switch on and off (RSI, MACD, ATR, Score), a line-drawing tool saved per stock, PNG screenshots, and
+  timeframe keys 1–7.
+
+**Research tabs**
+- **Stats:**
+  - returns from 1 day to 5 years, plus year-to-date
+  - daily, weekly and monthly signal agreement
+  - fair value (Graham number, Graham growth, market multiple, analysts)
+  - analyst target range and a 9-point financial health checklist
+  - ownership and short interest
+  - seasonality by month and return distribution (skew, fat tails)
+  - drawdown chart, rolling volatility and the engine's signal history with results
+- **Levels:** expected weekly and monthly move, target-vs-stop odds (Monte Carlo), a volatility cone table,
+  support/resistance with touch counts, pivots, Fibonacci levels and recent patterns.
+- **Peers:** sector peers with performance and correlation, plus an AI peer comparison.
+- **Tools:**
+  - position sizer showing 1R/2R/3R profit targets (R = the amount at risk)
+  - price and score alerts
+  - private notes
+  - dividend history, trailing-12-month yield and splits
+  - copy a summary or a link
+- **AI:** quick questions ("Why is it moving?", bull vs bear, long-term hold, explain simply, peers, how much to buy).
+
+**Markets dashboard** (🌍 tab)
+- Fear & Greed gauge (six components) and the US yield curve with an inversion warning.
+- Breadth (share of stocks above their 200-day average, new highs/lows, average RSI) and currency strength.
+- Sector rotation, top gainers and losers, 35 world indices, market headlines and an AI daily briefing.
+
+**Scanner, watchlists and alerts**
+- Screener filters with 7 presets, saved screens, CSV export and auto-rescan.
+- Multiple named watchlists.
+- Price and score alerts with a sound, desktop notification and banner, plus re-arming.
+- World market clocks showing which of 12 exchanges are open.
+
+**Tools menu** (🧰)
+- Position size and reward/risk calculator (with fees and break-even win rate).
+- Compound interest / monthly investing (with inflation) and a Monte Carlo goal planner.
+- Currency converter, multi-stock compare with a correlation matrix, and a portfolio backtester with rebalancing
+  vs the S&P 500.
+- Backup and restore.
+
+**Holdings**
+- Analytics: volatility, VaR, beta, correlation, effective positions, dividend income, last-year curve, where the risk
+  comes from, and sector and currency breakdown.
+- A trade journal that logs automatically, with realised P/L.
+
+**AI assistant**
+- Floating ✨ chat on the Command screen with your plan as context.
+
 ## What-If Lab 🔮
 
 Type any event ("China invades Taiwan", "Fed cuts 1%", "oil hits $150", "AI boom doubles data-center capex"):

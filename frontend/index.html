@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TradeScope · Command</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b8cff'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none'/></svg>">
-<link rel="stylesheet" href="/css/app.css?v=4">
+<link rel="stylesheet" href="/css/app.css?v=5">
 <style>
   .grid.cmd { grid-template-columns: 330px minmax(560px, 1fr) 430px; }
   .pulse { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -73,6 +73,11 @@
     <select id="market" class="in" style="width:250px"></select>
     <div class="search"><span class="ico">⌕</span><input id="q" class="in" placeholder="Search any stock, ETF, crypto, FX…  ( / )" autocomplete="off"><div id="qres" class="results"></div></div>
     <div class="spacer"></div>
+    <div style="position:relative"><button class="btn sm ghost" id="clkBtn" data-tip="World market hours">🕐 <span id="clkTxt">Markets</span></button><div class="clockpop" id="clkPop"></div></div>
+    <button class="btn sm ghost" id="alertBtn" data-tip="Price & signal alerts">🔔 <span id="alertN">0</span></button>
+    <button class="btn sm" id="toolsBtn" data-tip="Calculators, compare, backtester, goal planner, glossary… (T)">🧰 Tools</button>
+    <button class="btn sm ghost" id="themeBtn" data-tip="Light / dark theme">🌓</button>
+    <button class="btn sm ghost" id="helpBtn" data-tip="Keyboard shortcuts & guided tour">❓</button>
     <span id="aist" class="pill"><span class="dot"></span>AI…</span>
     <div class="seg"><button data-mode="beginner">Beginner</button><button data-mode="pro">Pro</button></div>
     <button class="btn primary" id="openResearch" title="Opens on your second monitor when the browser allows it">⧉ Open Research Screen</button>
@@ -100,7 +105,7 @@
         <div class="pb"><div class="heat" id="heat"></div></div>
       </section>
       <section class="panel" style="flex:1">
-        <div class="ph">Watchlist <span class="spacer"></span><button class="btn sm ghost" id="wlAdd" title="Add the selected symbol">＋ selected</button></div>
+        <div class="ph">Watchlist <select class="in" id="wlSel" style="width:120px;padding:2px 6px;font-size:12px"></select><span class="spacer"></span><button class="btn sm ghost" id="wlNew" data-tip="Create a new watchlist">＋ list</button><button class="btn sm ghost" id="wlAdd" data-tip="Add the selected symbol">＋ selected</button></div>
         <div class="pb" style="padding:0"><table class="t"><tbody id="wl"></tbody></table></div>
       </section>
     </div>
@@ -108,13 +113,18 @@
     <!-- CENTER -->
     <section class="panel">
       <div class="ph">
-        <div class="tabs" id="tabs"><button data-t="long" class="on">Top Buys</button><button data-t="short">Shorts / Avoid</button><button data-t="all">All</button><button data-t="whatif">🔮 What-If Lab</button></div>
+        <div class="tabs" id="tabs"><button data-t="long" class="on">Top Buys</button><button data-t="short">Shorts / Avoid</button><button data-t="all">All</button><button data-t="whatif">🔮 What-If Lab</button><button data-t="markets">🌍 Markets</button></div>
         <span class="sub" id="scanInfo"></span><span class="spacer"></span>
-        <input id="filter" class="in" placeholder="Filter…" style="width:150px;padding:4px 8px">
+        <input id="filter" class="in" placeholder="Filter…" style="width:130px;padding:4px 8px">
+        <button class="btn sm scan-only" id="fltBtn" data-tip="Screener filters & presets">⚙ Screener</button>
+        <button class="btn sm ghost scan-only" id="csvBtn" data-tip="Export this table as CSV">⬇</button>
+        <button class="btn sm ghost scan-only" id="autoBtn" data-tip="Auto-rescan every 5 minutes">⏱</button>
         <button class="btn sm" id="refresh">↻ Rescan</button>
       </div>
       <div class="hint b-only scan-only" style="margin:8px 12px 0">Every row is scored from <b>-100</b> (strongly bearish) to <b>+100</b> (strongly bullish) by combining trend, momentum, relative strength, breakouts, RSI, MACD and volume. <b>Confidence</b> blends factor agreement with how often this signal was right on that instrument in the past. <b>Click</b> a row to select it, <b>double-click</b> to open full research (on your second screen, or in a popup if you have one monitor).</div>
+      <div class="filters scan-only" id="filters"></div>
       <div class="pb wi" id="whatif" style="display:none"></div>
+      <div class="pb" id="overview" style="display:none"></div>
       <div class="pb scan-only" style="padding:0 0 4px">
         <table class="t"><thead><tr>
           <th data-k="symbol">Symbol</th><th data-k="price" class="r">Price</th><th data-k="changePct" class="r">Day</th>
@@ -130,6 +140,8 @@
       <section class="panel" style="flex:none;max-height:52vh">
         <div class="ph">My Strategy <span class="spacer"></span><span class="sub">saved automatically</span></div>
         <div class="pb">
+          <div class="field" style="margin-bottom:8px"><label>Risk level (0 = very safe · 100 = very aggressive) <span class="q" data-tip="One dial sets every risk parameter: risk per trade, volatility target, drawdown limit, position and sector caps, number of positions, cash reserve, stop distance, optimiser goal, horizon and style. Fine-tune any of them under Advanced.">ⓘ</span></label>
+            <div class="risk-dial"><input type="range" min="0" max="100" step="1" id="riskDial"><div><div class="risk-num" id="riskNum">50</div><div class="dim" id="riskLbl" style="font-size:11px;text-align:right">Moderate</div></div></div></div>
           <div class="presets" id="presets"><button data-p="conservative">🛡️ Safe</button><button data-p="balanced">⚖️ Balanced</button><button data-p="aggressive">🚀 Aggressive</button><button data-p="custom">🎛️ Custom</button></div>
           <div class="form">
             <div class="field"><label>Total budget</label><input class="in num" data-k="budget" type="number" min="0" step="100"></div>
@@ -176,8 +188,10 @@
 
 <!-- holdings -->
 <div class="modal-bg" id="holdModal"><div class="modal hmodal">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><h3 style="margin:0">💼 My Holdings</h3><span class="muted" style="font-size:12px">Tracking only. TradeScope never places orders.</span><span class="spacer"></span>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><h3 style="margin:0">💼 My Holdings</h3><div class="tabs" id="hTabs"><button data-h="pos" class="on">Positions</button><button data-h="ana">Analytics</button><button data-h="jr">Journal</button></div><span class="muted" style="font-size:12px">Tracking only. TradeScope never places orders.</span><span class="spacer"></span>
     <button class="btn sm" id="hImport">⬆ Import CSV</button><button class="btn sm" id="hExport">⬇ Export CSV</button><button class="btn sm ghost" data-close>✕ Close</button></div>
+  <div id="hAna" style="display:none"></div><div id="hJr" style="display:none"></div>
+  <div id="hPos">
   <div class="hsum"><div><label>Market value</label><b id="hsVal">–</b></div><div><label>Total P/L</label><b id="hsPnl">–</b></div><div><label>Today</label><b id="hsDay">–</b></div><div><label>Positions</label><b id="hsN">–</b></div></div>
   <div class="hadd">
     <div class="field"><label>Add a stock, ETF, crypto…</label><div class="search"><span class="ico">⌕</span><input id="haSym" class="in" placeholder="Type a name or ticker, e.g. Apple or AAPL" autocomplete="off"><div id="haRes" class="results"></div></div></div>
@@ -189,7 +203,14 @@
   <div style="max-height:52vh;overflow:auto"><table class="t ht"><thead><tr><th>Holding</th><th class="r">Qty</th><th class="r">Avg cost</th><th class="r">Price</th><th class="r">Value</th><th class="r">P/L</th><th class="r">Today</th><th>Weight</th><th>Signal</th><th class="r">Stop</th><th></th></tr></thead><tbody id="hRows"></tbody></table></div>
   <textarea id="hCsv" class="in mono" rows="5" style="display:none;margin-top:10px" placeholder="symbol,qty,avg_cost[,side]&#10;AAPL,10,180.5&#10;RELIANCE.NS,20,2900"></textarea>
   <div class="dim" style="font-size:11px;margin-top:8px">Edit quantity or cost directly in the table; changes save instantly. Click a row to research it.</div>
+  </div>
 </div></div>
+
+<!-- AI assistant -->
+<button class="fab" id="fab" data-tip="Ask the AI assistant anything about markets or your plan">✨</button>
+<div class="assist" id="assist"><div class="ph" style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)"><b>✨ AI market assistant</b><span class="spacer"></span><button class="btn sm ghost" id="asBrief">📰 Daily briefing</button><button class="btn sm ghost" id="asX">✕</button></div>
+  <div class="log" id="asLog"><div class="muted" style="font-size:12.5px">Ask about markets, sectors, your plan or any concept, e.g. "What does an inverted yield curve mean?" or "Why is my plan heavy in banks?"</div></div>
+  <div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--line)"><textarea id="asIn" class="in" rows="2" style="resize:none" placeholder="Ask anything… (Enter to send)"></textarea><button class="btn primary" id="asGo">Ask</button></div></div>
 
 <!-- plan analysis -->
 <div class="modal-bg" id="anaModal"><div class="modal amodal"><div id="anaBody"></div></div></div>
@@ -199,7 +220,9 @@
 
 <div class="mkpop" id="mkpop"></div>
 
-<script src="/js/common.js?v=4"></script>
-<script src="/js/command.js?v=4"></script>
+<script src="/js/common.js?v=5"></script>
+<script src="/js/ux.js?v=5"></script>
+<script src="/js/command.js?v=5"></script>
+<script src="/js/command-extra.js?v=5"></script>
 </body>
 </html>

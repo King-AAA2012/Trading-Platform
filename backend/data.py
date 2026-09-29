@@ -106,6 +106,7 @@ def yahoo_history(symbol: str, rng: str = "2y", interval: str = "1d") -> dict | 
         keep = np.isfinite(c) & (c > 0)
         o = np.where(np.isfinite(o), o, c); h = np.where(np.isfinite(h), h, c); l = np.where(np.isfinite(l), l, c)
         m = res.get("meta", {})
+        ev = res.get("events") or {}
         ccy, div = SUBUNIT.get(m.get("currency"), (m.get("currency", ""), 1.0))   # pence / cents -> major unit
         return {
             "symbol": symbol, "t": t[keep], "o": (o * f / div)[keep], "h": (h * f / div)[keep], "l": (l * f / div)[keep],
@@ -115,6 +116,8 @@ def yahoo_history(symbol: str, rng: str = "2y", interval: str = "1d") -> dict | 
                      "price": (m.get("regularMarketPrice") or float("nan")) / div,
                      "prevClose": (m.get("chartPreviousClose") or m.get("previousClose") or float("nan")) / div,
                      "high52": (m.get("fiftyTwoWeekHigh") or float("nan")) / div, "low52": (m.get("fiftyTwoWeekLow") or float("nan")) / div},
+            "events": {"dividends": {str(v.get("date")): (v.get("amount") or 0) / div for v in (ev.get("dividends") or {}).values()},
+                       "splits": {str(v.get("date")): f"{v.get('numerator', 1):g}:{v.get('denominator', 1):g}" for v in (ev.get("splits") or {}).values()}},
         }
     ttl = 60 if interval not in ("1d", "1wk", "1mo") else 600
     daily = interval == "1d" and rng in ("2y", "5y")

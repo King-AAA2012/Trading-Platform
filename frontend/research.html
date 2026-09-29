@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TradeScope · Research</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%239b7bff'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none'/></svg>">
-<link rel="stylesheet" href="/css/app.css?v=4">
+<link rel="stylesheet" href="/css/app.css?v=5">
 <style>body.embed header.top .brand, body.embed #reportBtn { display: none; } body.embed .app.research { grid-template-rows: 46px 1fr; }</style>
 <style>
   .grid.res { grid-template-columns: minmax(0, 1fr) 470px; }
@@ -16,8 +16,20 @@
   .charts { display: grid; grid-template-rows: 1fr 80px 80px 80px 90px; gap: 1px; background: var(--line); flex: 1; min-height: 0; }
   .charts > div { background: var(--panel); position: relative; min-height: 0; }
   .charts .lbl { position: absolute; left: 8px; top: 4px; z-index: 3; font-size: 10.5px; color: var(--muted); pointer-events: none; }
-  body:not(.pro) .charts { grid-template-rows: 1fr 80px 110px; }
-  body:not(.pro) .charts .rsi, body:not(.pro) .charts .macd { display: none; }
+  .dd { position: relative; }
+  .dd > .menu { position: absolute; top: 30px; right: 0; z-index: 40; background: var(--panel2); border: 1px solid var(--line2); border-radius: 10px; padding: 8px 10px; min-width: 210px; display: none; box-shadow: 0 16px 40px rgba(0,0,0,.5); }
+  .dd.open > .menu { display: block; }
+  .dd .menu label { display: flex; gap: 7px; align-items: center; padding: 3px 0; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .dd .menu h5 { margin: 6px 0 3px; font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .6px; }
+  .toolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #cMain.drawing { cursor: crosshair; }
+  .perf { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .perf div { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 6px; text-align: center; }
+  .perf label { display: block; font-size: 10px; color: var(--muted); }
+  .perf b { font-family: var(--mono); font-size: 12.5px; }
+  .qchips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  #rtabs { flex-wrap: wrap; row-gap: 2px; }
+  #rtabs button { padding: 4px 8px; }
   .legend { position: absolute; left: 10px; top: 8px; z-index: 3; font-size: 11.5px; font-family: var(--mono); pointer-events: none; display: flex; gap: 12px; flex-wrap: wrap; }
   .rec { border-radius: 12px; padding: 14px; background: linear-gradient(160deg, #121a2b, #0e1320); border: 1px solid var(--line2); }
   .rec .action { font-size: 22px; font-weight: 800; letter-spacing: .3px; }
@@ -53,11 +65,42 @@
       <div class="ph">
         <div class="seg" id="tf"><button data-tf="1D">1D</button><button data-tf="5D">5D</button><button data-tf="3M">3M</button><button data-tf="6M">6M</button><button data-tf="1Y" class="on">1Y</button><button data-tf="2Y">2Y</button><button data-tf="5Y">5Y</button></div>
         <span class="spacer"></span>
-        <label class="check"><input type="checkbox" id="oEma" checked> EMA 20/50/200</label>
-        <label class="check"><input type="checkbox" id="oBb"> Bollinger</label>
-        <label class="check"><input type="checkbox" id="oSig" checked> Signals</label>
-        <label class="check"><input type="checkbox" id="oLv" checked> Trade levels</label>
-        <label class="check" title="Chandelier exit: 22-day high minus 3×ATR (or low plus 3×ATR for shorts)"><input type="checkbox" id="oAtr" checked> ATR trailing stop</label>
+        <div class="toolbar">
+          <select class="in" id="ctype" style="width:118px;padding:4px 6px" title="Chart type (C)"><option value="candle">🕯 Candles</option><option value="ha">Heikin-Ashi</option><option value="line">📈 Line</option><option value="area">Area</option></select>
+          <button class="btn sm" id="logBtn" title="Logarithmic price scale (L)">Log</button>
+          <div class="dd" id="ovDD"><button class="btn sm">Overlays ▾</button><div class="menu">
+            <h5>Trend</h5>
+            <label><input type="checkbox" id="oEma" checked> EMA 20 / 50 / 200</label>
+            <label><input type="checkbox" id="oSma" data-ov> SMA 50 / 200</label>
+            <label><input type="checkbox" id="oSt" data-ov> Supertrend (10, 3)</label>
+            <label><input type="checkbox" id="oPsar" data-ov> Parabolic SAR</label>
+            <h5>Bands</h5>
+            <label><input type="checkbox" id="oBb"> Bollinger (20, 2)</label>
+            <label><input type="checkbox" id="oKc" data-ov> Keltner (20, 2 ATR)</label>
+            <label><input type="checkbox" id="oDc" data-ov> Donchian (20)</label>
+            <h5>Levels</h5>
+            <label><input type="checkbox" id="oLv" checked> Trade levels</label>
+            <label title="Chandelier exit: 22-day high minus 3×ATR (or low plus 3×ATR for shorts)"><input type="checkbox" id="oAtr" checked> ATR trailing stop</label>
+            <label><input type="checkbox" id="oPiv" data-ov> Pivot points</label>
+            <label><input type="checkbox" id="oSr" data-ov> Auto support / resistance</label>
+            <label><input type="checkbox" id="oFib" data-ov> Fibonacci retracement</label>
+            <label><input type="checkbox" id="o52" data-ov> 52-week high / low</label>
+            <h5>Signals & projections</h5>
+            <label><input type="checkbox" id="oSig" checked> Engine buy / sell signals</label>
+            <label><input type="checkbox" id="oPat" data-ov> Candlestick patterns</label>
+            <label><input type="checkbox" id="oCone" data-ov> Volatility cone (3 months)</label>
+            <label><input type="checkbox" id="oCmp" data-ov> Compare with benchmark</label>
+          </div></div>
+          <div class="dd" id="pnDD"><button class="btn sm">Panes ▾</button><div class="menu">
+            <label><input type="checkbox" data-pane="cRsi"> RSI 14</label>
+            <label><input type="checkbox" data-pane="cMacd"> MACD</label>
+            <label><input type="checkbox" data-pane="cAtr" checked> ATR 14</label>
+            <label><input type="checkbox" data-pane="cScore" checked> TradeScope Score</label>
+          </div></div>
+          <button class="btn sm" id="drawBtn" title="Draw a horizontal line: click this, then click the chart (D)">✏ Line</button>
+          <button class="btn sm ghost" id="clearDraw" title="Remove your drawn lines">🧹</button>
+          <button class="btn sm ghost" id="shotBtn" title="Save the chart as a PNG image">📷</button>
+        </div>
       </div>
       <div class="charts">
         <div id="cMain"><div class="legend" id="legend"></div></div>
@@ -70,7 +113,7 @@
     <div class="col">
       <section class="panel" style="flex:none"><div class="pb" id="rec"><div class="empty">No symbol selected.</div></div></section>
       <section class="panel" style="flex:1">
-        <div class="ph"><div class="tabs" id="rtabs"><button data-t="why" class="on">Why</button><button data-t="fund">Fundamentals</button><button data-t="bt">Backtest</button><button data-t="news">News</button><button data-t="ai">✨ AI Analyst</button></div></div>
+        <div class="ph"><div class="tabs" id="rtabs"><button data-t="why" class="on">Why</button><button data-t="fund">Fundamentals</button><button data-t="bt">Backtest</button><button data-t="stats">Stats</button><button data-t="levels">Levels</button><button data-t="peers">Peers</button><button data-t="news">News</button><button data-t="tools">Tools</button><button data-t="ai">✨ AI</button></div></div>
         <div class="pb" id="tabBody"></div>
         <div id="aiFooter" style="display:none;padding:8px 12px 10px;border-top:1px solid var(--line);background:var(--panel)">
           <div style="display:flex;gap:6px;align-items:flex-end">
@@ -84,7 +127,9 @@
   </main>
 </div>
 <script src="/vendor/lwc.js"></script>
-<script src="/js/common.js?v=4"></script>
-<script src="/js/research.js?v=4"></script>
+<script src="/js/common.js?v=5"></script>
+<script src="/js/ux.js?v=5"></script>
+<script src="/js/research.js?v=5"></script>
+<script src="/js/research-extra.js?v=5"></script>
 </body>
 </html>
