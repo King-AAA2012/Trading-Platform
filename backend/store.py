@@ -25,10 +25,21 @@ DEFAULT = {
 }
 
 
+def _private() -> bool:
+    from . import config
+    return config.PRIVATE
+
+
 def load() -> dict:
     from . import db
-    uid = current_uid.get()
-    st = (db.get_state(uid) if uid else None) or {}
+    if _private():                # private mode: your own local file, exactly like the original app
+        try:
+            st = json.loads(PATH.read_text("utf-8"))
+        except Exception:
+            st = {}
+    else:
+        uid = current_uid.get()
+        st = (db.get_state(uid) if uid else None) or {}
     out = json.loads(json.dumps(DEFAULT))
     out.update(st)
     out["profile"] = {**DEFAULT["profile"], **st.get("profile", {})}
@@ -37,6 +48,11 @@ def load() -> dict:
 
 def save(st: dict) -> None:
     from . import db
+    if _private():
+        tmp = PATH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(st, indent=1), "utf-8")
+        tmp.replace(PATH)
+        return
     uid = current_uid.get()
     if uid:                       # anonymous requests never persist anything
         db.put_state(uid, st)

@@ -176,6 +176,7 @@ const UX = (() => {
   let cfg;
   try { cfg = await fetch("/api/config").then((r) => r.json()); } catch { return; }
   const KEY = "ch-beta-ack";
+  if (cfg.private) return;                       // your own private copy: no beta/terms pop-up
   try { if (localStorage.getItem(KEY) === cfg.termsVersion) return; } catch {}
   const e = UX.esc, mail = `<a href="mailto:${e(cfg.email)}">${e(cfg.email)}</a>`;
   const bg = document.createElement("div");

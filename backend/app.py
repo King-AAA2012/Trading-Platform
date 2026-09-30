@@ -35,6 +35,20 @@ async def gatekeeper(request: Request, call_next):
     """Identify the user, keep every account's data private, enforce the trial/subscription, block cross-site
     writes, and make browsers revalidate HTML/JS/CSS so an update never mixes old pages with new scripts."""
     path = request.url.path
+    if config.PRIVATE:
+        # single-user private mode: no login, trial or payments, but only ever reachable from this computer
+        if (request.client.host if request.client else "") not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            return JSONResponse({"detail": "Private mode only accepts connections from this computer."}, status_code=403)
+        if path in ("/", "/login.html", "/account.html"):
+            return RedirectResponse("/app", status_code=303)
+        if path == "/api/me":
+            return JSONResponse({"id": 0, "email": "private", "name": "Me", "access": {"active": True, "state": "private"}, "termsAccepted": True})
+        if path.startswith(("/api/auth/", "/api/billing/")):
+            return JSONResponse({"detail": "Accounts and billing are switched off in private mode."}, status_code=404)
+        resp = await call_next(request)
+        if not path.startswith(("/api/", "/vendor/")):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
     u = None
     if path.startswith("/api/") or path in APP_PAGES or path == "/":
         u = auth.user_from_request(request)

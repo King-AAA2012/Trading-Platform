@@ -42,6 +42,9 @@ RAZORPAY_KEY_ID = E("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = E("RAZORPAY_KEY_SECRET", "")
 RAZORPAY_WEBHOOK_SECRET = E("RAZORPAY_WEBHOOK_SECRET", "")
 
+# Private mode (Private Start.bat): single user, no accounts/trial/payments, data in data/state.json, localhost only
+PRIVATE = E("CH_PRIVATE", "0") == "1"
+
 COOKIE_SECURE = E("COOKIE_SECURE", "0") == "1"       # set to 1 when served over HTTPS
 SESSION_DAYS = int(E("SESSION_DAYS", "30"))
 # comma-separated emails that get free access forever (e.g. the owner / testers)
@@ -51,4 +54,4 @@ COMP_EMAILS = {x.strip().lower() for x in E("COMP_EMAILS", "").split(",") if x.s
 def public() -> dict:
     return {"appName": APP_NAME, "motto": MOTTO, "email": COMPANY_EMAIL, "entity": LEGAL_ENTITY, "trialDays": TRIAL_DAYS,
             "currency": PRICE_CURRENCY, "monthly": PRICE_MONTHLY, "yearly": PRICE_YEARLY, "termsVersion": TERMS_VERSION,
-            "payments": bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)}
+            "payments": bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET), "private": PRIVATE}

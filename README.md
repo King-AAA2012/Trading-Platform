@@ -8,6 +8,13 @@ short or avoid, and exactly how much** for your budget, builds a **multi-market 
 > **Research only.** CasuallyHedge has no broker connection and cannot place trades. Nothing here is financial advice.
 
 
+## Private mode (just for you)
+
+Double-click **`Private Start.bat`** to use CasuallyHedge on your own PC with **no sign-up, login, trial, payments
+or beta pop-up**. Your data lives in `data/state.json`, separate from website accounts, exactly like the original
+app. For safety, private mode only accepts connections from your own computer (127.0.0.1), so it can't be
+exposed to the internet by mistake. Use `start.bat` when you want the full website with accounts.
+
 ## Running CasuallyHedge as a website
 
 CasuallyHedge now has accounts, a 30-day free trial, paid plans ($20/month or $200/year via Razorpay), private

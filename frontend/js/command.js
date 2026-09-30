@@ -101,6 +101,7 @@
     setInterval(renderWatch, 20000);        // near-live watchlist
     api("/api/me").then((me) => {
       const a = me.access;
+      if (a.state === "private") { $("#acctBtn").style.display = "none"; $("#liveBadge").insertAdjacentHTML("afterend", '<span class="pill" data-tip="Private mode: just you, no login, data stays in data/state.json on this PC">🔒 Private</span>'); return; }
       $("#acctTxt").textContent = a.state === "trial" ? `Trial · ${a.trialDaysLeft}d left` : a.state === "paid" ? "Pro" : a.state === "comp" ? "Account" : "Subscribe";
       if (a.state === "trial" && a.trialDaysLeft <= 5) $("#acctBtn").classList.add("primary");
     }).catch(() => {});
