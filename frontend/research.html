@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TradeScope · Research</title>
+<title>CasuallyHedge · Research</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%239b7bff'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none'/></svg>">
 <link rel="stylesheet" href="/css/app.css?v=5">
 <style>body.embed header.top .brand, body.embed #reportBtn { display: none; } body.embed .app.research { grid-template-rows: 46px 1fr; }</style>
@@ -59,13 +59,14 @@
 <body>
 <div class="app research">
   <header class="top">
-    <div class="brand"><div class="logo" style="background:conic-gradient(from 30deg,var(--accent2),var(--accent),var(--up),var(--accent2))">◆</div>TradeScope <small>Research</small></div>
+    <div class="brand"><div class="logo" style="background:conic-gradient(from 30deg,var(--accent2),var(--accent),var(--up),var(--accent2))">◆</div>CasuallyHedge <small>Research</small></div>
     <div class="search" style="width:240px"><span class="ico">⌕</span><input id="q" class="in" placeholder="Symbol…  ( / )" autocomplete="off"><div id="qres" class="results"></div></div>
     <div class="quote" id="quote"><span class="muted">Select a symbol on the Command screen</span></div>
     <div class="spacer"></div>
     <span id="aist" class="pill"><span class="dot"></span>AI…</span>
     <div class="seg"><button data-mode="beginner">Beginner</button><button data-mode="pro">Pro</button></div>
     <button class="btn" id="watchBtn">☆ Watch</button>
+    <span class="pill" id="livePx" data-tip="Price refreshes every 15 seconds. Near-live, not guaranteed real-time; some exchanges are delayed 15+ minutes."><span class="dot on"></span><span id="liveTxt">Live</span></span>
     <button class="btn" id="reportBtn">📄 Full report</button>
   </header>
   <main class="grid res">
@@ -103,7 +104,7 @@
             <label><input type="checkbox" data-pane="cRsi"> RSI 14</label>
             <label><input type="checkbox" data-pane="cMacd"> MACD</label>
             <label><input type="checkbox" data-pane="cAtr" checked> ATR 14</label>
-            <label><input type="checkbox" data-pane="cScore" checked> TradeScope Score</label>
+            <label><input type="checkbox" data-pane="cScore" checked> CasuallyHedge Score</label>
           </div></div>
           <button class="btn sm" id="drawBtn" title="Draw a horizontal line: click this, then click the chart (D)">✏ Line</button>
           <button class="btn sm ghost" id="clearDraw" title="Remove your drawn lines">🧹</button>
@@ -115,7 +116,7 @@
         <div id="cRsi" class="rsi"><span class="lbl">RSI 14</span></div>
         <div id="cMacd" class="macd"><span class="lbl">MACD 12/26/9</span></div>
         <div id="cAtr"><span class="lbl">ATR 14: average daily price range</span></div>
-        <div id="cScore"><span class="lbl">TradeScope Score (−100 … +100). Green = buy zone, red = sell zone</span></div>
+        <div id="cScore"><span class="lbl">CasuallyHedge Score (−100 … +100). Green = buy zone, red = sell zone</span></div>
       </div>
     </section>
     <div class="col">

@@ -148,7 +148,7 @@
       $("#rec").innerHTML = `<div class="empty">Couldn't analyse ${esc(sym)}: ${esc(e.message)}</div>`;
       return;
     }
-    document.title = `${disp(sym)} · TradeScope Research`;
+    document.title = `${disp(sym)} · CasuallyHedge Research`;
     renderQuote(); renderRec();
     if (window.RX && RX.onLoad) await RX.onLoad(changed);
     draw(); renderTab(); watchBtn();

@@ -14,7 +14,7 @@ const TS = (() => {
       b = document.createElement("div");
       b.id = "ts-down";
       b.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9998;background:#3a2a08;color:#ffe3a3;border-bottom:1px solid #f5b942;padding:9px 14px;font-size:13px;display:flex;gap:10px;align-items:center;justify-content:center";
-      b.innerHTML = `<span class="spin"></span><b>Can't reach the TradeScope server.</b><span>Keep the <b>start.bat</b> window open (or double-click it again). Reconnecting automatically… your settings are safe.</span>`;
+      b.innerHTML = `<span class="spin"></span><b>Can't reach the CasuallyHedge server.</b><span>Keep the <b>start.bat</b> window open (or double-click it again). Reconnecting automatically… your settings are safe.</span>`;
       document.body.appendChild(b);
     }
     if (!show && b) b.remove();
@@ -30,7 +30,7 @@ const TS = (() => {
         }
         down = false;
         banner(false);
-        toast("✅ Reconnected to the TradeScope server");
+        toast("✅ Reconnected to the CasuallyHedge server");
         waiters.splice(0).forEach((f) => f());
       })();
     }
@@ -56,6 +56,8 @@ const TS = (() => {
       init.method = init.method || "POST";
     }
     const r = await netFetch(path, init);
+    if (r.status === 401 && !path.startsWith("/api/auth")) { location.replace("/login.html#login"); throw new Error("Please log in."); }
+    if (r.status === 402) { location.replace("/account.html?expired=1"); throw new Error("Subscription needed."); }
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
     return r.json();
   }

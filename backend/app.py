@@ -1,4 +1,4 @@
-"""TradeScope API + static frontend. Run: python -m uvicorn backend.app:app --port 8420"""
+"""CasuallyHedge API + static frontend. Run: python -m uvicorn backend.app:app --port 8420"""
 from __future__ import annotations
 
 import json
@@ -11,22 +11,81 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, data, engine, extras, markets, optimizer, planner, portfolio, scenario, store
+from fastapi import Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+from . import ai, auth, billing, config, data, db, engine, extras, markets, optimizer, planner, portfolio, scenario, store
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONT = ROOT / "frontend"
-app = FastAPI(title="TradeScope", version="2.0")
+app = FastAPI(title=config.APP_NAME, version="3.0", docs_url=None, redoc_url=None, openapi_url=None)
+app.include_router(auth.router)
+app.include_router(billing.router)
 _scan_cache: dict[str, tuple[float, list, dict]] = {}
 
 
+# pages and APIs anyone may reach without an account
+PUBLIC_API = ("/api/auth/", "/api/config", "/api/billing/webhook")
+MEMBER_API = ("/api/me", "/api/billing/")          # need login, but not an active subscription
+APP_PAGES = ("/app", "/index.html", "/research.html", "/report.html", "/account.html")
+
+
 @app.middleware("http")
-async def no_stale_assets(request, call_next):
-    """Make the browser revalidate HTML/JS/CSS on every load (cheap 304s), so after an update it never mixes an old
-    cached page with a new script."""
-    resp = await call_next(request)
-    if not request.url.path.startswith(("/api/", "/vendor/")):
+async def gatekeeper(request: Request, call_next):
+    """Identify the user, keep every account's data private, enforce the trial/subscription, block cross-site
+    writes, and make browsers revalidate HTML/JS/CSS so an update never mixes old pages with new scripts."""
+    path = request.url.path
+    u = None
+    if path.startswith("/api/") or path in APP_PAGES or path == "/":
+        u = auth.user_from_request(request)
+    token = store.current_uid.set(u["id"] if u else None)
+    try:
+        if path.startswith("/api/") and not path.startswith(PUBLIC_API):
+            if request.method in ("POST", "PUT", "DELETE") and "application/json" not in request.headers.get("content-type", "") \
+                    and not path.startswith("/api/auth/logout"):
+                return JSONResponse({"detail": "Unsupported request."}, status_code=415)       # CSRF guard: forms can't send JSON
+            if not u:
+                return JSONResponse({"detail": "Please log in."}, status_code=401)
+            if not path.startswith(MEMBER_API) and not auth.access(u)["active"]:
+                return JSONResponse({"detail": "Your free trial has ended. Subscribe to keep using CasuallyHedge.", "code": "expired"}, status_code=402)
+        if path in APP_PAGES:
+            if not u:
+                return RedirectResponse("/login.html", status_code=303)
+            if path != "/account.html" and not auth.access(u)["active"]:
+                return RedirectResponse("/account.html?expired=1", status_code=303)
+        resp = await call_next(request)
+    finally:
+        store.current_uid.reset(token)
+    if not path.startswith(("/api/", "/vendor/")):
         resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
     return resp
+
+
+@app.get("/api/config")
+def api_config():
+    return config.public()
+
+
+LEGAL_DOCS = {"terms": "Terms of Service", "privacy": "Privacy Policy", "disclaimer": "Risk Disclaimer", "refund": "Refund & Cancellation Policy",
+              "contact": "Contact Us"}
+
+
+@app.get("/legal/{doc}", response_class=HTMLResponse)
+def legal(doc: str):
+    if doc not in LEGAL_DOCS:
+        raise HTTPException(404)
+    body = (ROOT / "backend" / "legal" / f"{doc}.html").read_text("utf-8")
+    shell = (ROOT / "backend" / "legal" / "_shell.html").read_text("utf-8")
+    html = shell.replace("{{BODY}}", body).replace("{{TITLE}}", LEGAL_DOCS[doc])
+    for k, v in {"APP": config.APP_NAME, "MOTTO": config.MOTTO, "EMAIL": config.COMPANY_EMAIL, "ENTITY": config.LEGAL_ENTITY,
+                 "ADDRESS": config.LEGAL_ADDRESS, "JURISDICTION": config.JURISDICTION, "UPDATED": config.TERMS_VERSION, "SITE": config.SITE_URL,
+                 "TRIAL": str(config.TRIAL_DAYS), "CURRENCY": config.PRICE_CURRENCY, "MONTHLY": f"{config.PRICE_MONTHLY / 100:,.2f}",
+                 "YEARLY": f"{config.PRICE_YEARLY / 100:,.2f}"}.items():
+        html = html.replace("{{" + k + "}}", v)
+    return HTMLResponse(html)
 
 
 def clean(o):
@@ -151,10 +210,11 @@ def _equal_weight(hists: dict[str, dict]) -> dict | None:
 
 
 def run_scan(market: str, force: bool = False) -> tuple[list[dict], dict]:
-    hit = _scan_cache.get(market)
-    if hit and not force and time.time() - hit[0] < 600:
-        return hit[1], hit[2]
     md = markets.market_def(market)
+    key = f"{market}:{int(_can_short(md))}"       # results differ with the user's short-selling setting
+    hit = _scan_cache.get(key)
+    if hit and not force and time.time() - hit[0] < 180:
+        return hit[1], hit[2]
     syms = md["symbols"]
     if not syms:
         raise HTTPException(503, f"Couldn't load the stock list for {md['name']} right now. Try again shortly.")
@@ -178,8 +238,8 @@ def run_scan(market: str, force: bool = False) -> tuple[list[dict], dict]:
     for i, r in enumerate(order):
         r["rsRank"] = round(100 * (i + 1) / len(order))
     rows.sort(key=lambda r: -r["score"])
-    _scan_cache[market] = (time.time(), rows, {s: hists[s] for s in syms if s in hists})
-    return rows, _scan_cache[market][2]
+    _scan_cache[key] = (time.time(), rows, {s: hists[s] for s in syms if s in hists})
+    return rows, _scan_cache[key][2]
 
 
 @app.get("/api/scan/{market}")
@@ -213,8 +273,6 @@ def api_state():
 @app.post("/api/state")
 def api_state_save(patch: dict = Body(...)):
     st = store.load()
-    if "profile" in patch and patch["profile"].get("allowShorts") != st["profile"].get("allowShorts"):
-        _scan_cache.clear()  # backtest/confidence depend on whether shorts are allowed
     for k in ("profile", "holdings", "watchlist", "lastMarket", "planMarkets", "watchlists", "alerts", "journal", "notes", "screens"):
         if k in patch:
             st[k] = patch[k]
@@ -693,7 +751,12 @@ def vendor_lwc():
 
 
 @app.get("/")
-def index():
+def index(request: Request):
+    return RedirectResponse("/app" if auth.user_from_request(request) else "/login.html", status_code=303)
+
+
+@app.get("/app")
+def app_page():
     return FileResponse(FRONT / "index.html")
 
 

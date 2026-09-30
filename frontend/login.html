@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CasuallyHedge · Trading, for the little guy</title>
+<meta name="description" content="CasuallyHedge: AI-powered market research, stock scores, portfolio plans and what-if scenarios across 44 global markets. Trading, for the little guy.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b8cff'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none'/></svg>">
+<link rel="stylesheet" href="/css/app.css?v=6">
+<style>
+  body { overflow: auto; background: radial-gradient(1200px 600px at 10% -10%, rgba(91,140,255,.18), transparent), radial-gradient(900px 500px at 110% 10%, rgba(155,123,255,.14), transparent), var(--bg); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 20px 40px; display: grid; grid-template-columns: 1.25fr 1fr; gap: 40px; align-items: start; }
+  .nav { max-width: 1180px; margin: 0 auto; padding: 16px 20px 0; display: flex; align-items: center; gap: 10px; }
+  .hero h1 { font-size: 46px; line-height: 1.08; margin: 22px 0 10px; letter-spacing: -.5px; }
+  .hero h1 span { background: linear-gradient(90deg, #5b8cff, #9b7bff, #1fd286); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.lead { font-size: 17px; color: var(--muted); max-width: 560px; }
+  .beta { display: inline-block; background: rgba(245,185,66,.14); color: var(--warn); border: 1px solid rgba(245,185,66,.4); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+  .feats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 24px 0; }
+  .feat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .feat b { display: block; margin-bottom: 3px; } .feat span { color: var(--muted); font-size: 12.5px; }
+  .prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .price { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; text-align: center; }
+  .price.best { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .price .amt { font-family: var(--mono); font-size: 24px; font-weight: 700; margin: 4px 0; }
+  .auth { background: var(--panel); border: 1px solid var(--line2); border-radius: 16px; padding: 22px; position: sticky; top: 22px; box-shadow: 0 30px 70px rgba(0,0,0,.35); }
+  .auth .tabs { margin-bottom: 14px; } .auth .field { margin-bottom: 10px; } .auth input.in { padding: 9px 11px; font-size: 14px; }
+  .auth .btn.primary { width: 100%; padding: 10px; font-size: 14.5px; margin-top: 6px; }
+  .err { color: var(--down); font-size: 12.5px; min-height: 18px; margin-top: 6px; }
+  .foot { text-align: center; font-size: 12px; color: var(--muted); padding: 24px; border-top: 1px solid var(--line); }
+  .foot a { color: var(--muted); margin: 0 8px; }
+  @media (max-width: 960px) { .wrap { grid-template-columns: 1fr; } .auth { position: static; } .hero h1 { font-size: 34px; } .prices, .feats { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="nav"><div class="brand"><div class="logo">▲</div><span id="appName">CasuallyHedge</span></div><span class="beta">BETA</span><span class="spacer"></span>
+  <button class="btn sm ghost" onclick="UX.toggleTheme()" data-tip="Light / dark theme">🌓</button></div>
+<div class="wrap">
+  <div class="hero">
+    <h1><span id="motto">Trading, for the little guy.</span></h1>
+    <p class="lead">Wall-Street-grade research without the Wall-Street price tag. Scan 44 global markets, get clear buy/sell scores, let an AI investment committee build a portfolio for your budget, and ask "what if?" about any event.</p>
+    <div class="feats">
+      <div class="feat"><b>🌍 44 markets, one screen</b><span>US, India, Europe, Asia and more, plus crypto, FX, commodities and bonds.</span></div>
+      <div class="feat"><b>🧠 10-agent AI committee</b><span>Trend, value, risk and macro analysts debate every idea, and a devil's advocate pushes back.</span></div>
+      <div class="feat"><b>📋 A plan for your budget</b><span>Exact share counts sized to your risk level, with stops and targets.</span></div>
+      <div class="feat"><b>🔮 What-if lab</b><span>"What if oil hits $150?" See the winners and losers instantly.</span></div>
+      <div class="feat"><b>📈 Pro-grade charts</b><span>20+ overlays, patterns, levels, stats, fair value and a health score.</span></div>
+      <div class="feat"><b>🔒 Private by design</b><span>Your portfolio and notes are visible only to you.</span></div>
+    </div>
+    <div class="prices">
+      <div class="price"><div class="muted">Free trial</div><div class="amt" id="pTrial">30 days</div><div class="dim" style="font-size:12px">Full access, no card needed</div></div>
+      <div class="price"><div class="muted">Monthly</div><div class="amt" id="pMonth">$20</div><div class="dim" style="font-size:12px">per month</div></div>
+      <div class="price best"><div class="muted">Yearly</div><div class="amt" id="pYear">$200</div><div class="dim" style="font-size:12px">2 months free</div></div>
+    </div>
+    <p class="disclaimer" style="margin-top:16px">CasuallyHedge is a research tool, not a broker or investment adviser. It doesn't place trades or give personalised advice. Investing involves risk, including loss of capital. Market data may be delayed. See the <a href="/legal/disclaimer">Risk Disclaimer</a>.</p>
+  </div>
+
+  <div class="auth">
+    <div class="tabs" id="aTabs"><button data-a="signup" class="on">Create account</button><button data-a="login">Log in</button></div>
+    <form id="fSignup" autocomplete="on">
+      <div class="field"><label>Name</label><input class="in" id="suName" autocomplete="name" placeholder="Your name"></div>
+      <div class="field"><label>Email</label><input class="in" id="suEmail" type="email" autocomplete="email" required placeholder="you@example.com"></div>
+      <div class="field"><label>Password <span class="dim" id="pwHint">(8+ characters, a letter and a number)</span></label><input class="in" id="suPw" type="password" autocomplete="new-password" required></div>
+      <label class="check" style="margin:8px 0"><input type="checkbox" id="suAdult"> I am 18 or older.</label>
+      <label class="check" style="align-items:flex-start"><input type="checkbox" id="suTerms" style="margin-top:3px"> <span>I agree to the <a href="/legal/terms" target="_blank">Terms</a>, <a href="/legal/privacy" target="_blank">Privacy Policy</a> and <a href="/legal/disclaimer" target="_blank">Risk Disclaimer</a>, and I understand CasuallyHedge is a beta research tool that takes no responsibility for investment losses.</span></label>
+      <button class="btn primary" type="submit" id="suBtn">Start my free trial</button>
+      <div class="err" id="suErr"></div>
+    </form>
+    <form id="fLogin" style="display:none" autocomplete="on">
+      <div class="field"><label>Email</label><input class="in" id="liEmail" type="email" autocomplete="email" required></div>
+      <div class="field"><label>Password</label><input class="in" id="liPw" type="password" autocomplete="current-password" required></div>
+      <button class="btn primary" type="submit" id="liBtn">Log in</button>
+      <div class="err" id="liErr"></div>
+      <div class="dim" style="font-size:12px;margin-top:8px">Forgot your password? Email <a class="co-email" href="#"></a> from your account email and we'll reset it.</div>
+    </form>
+  </div>
+</div>
+<div class="foot"><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/disclaimer">Risk Disclaimer</a><a href="/legal/refund">Refunds</a><a href="/legal/contact">Contact</a>
+  <div style="margin-top:6px">Found a bug? Tell us at <a class="co-email" href="#"></a></div></div>
+<script src="/js/ux.js?v=6"></script>
+<script>
+(async () => {
+  const $ = (s) => document.querySelector(s);
+  try { const r = await fetch("/api/me"); if (r.ok) { location.replace("/app"); return; } } catch {}
+  const cfg = await fetch("/api/config").then((r) => r.json()).catch(() => null);
+  if (cfg) {
+    const money = (v) => new Intl.NumberFormat(undefined, { style: "currency", currency: cfg.currency, maximumFractionDigits: 0 }).format(v / 100);
+    $("#appName").textContent = cfg.appName; $("#motto").textContent = cfg.motto;
+    $("#pTrial").textContent = `${cfg.trialDays} days`; $("#pMonth").textContent = money(cfg.monthly); $("#pYear").textContent = money(cfg.yearly);
+    document.querySelectorAll(".co-email").forEach((a) => { a.textContent = cfg.email; a.href = "mailto:" + cfg.email; });
+  }
+  const tabs = document.querySelectorAll("#aTabs button");
+  const show = (k) => { tabs.forEach((b) => b.classList.toggle("on", b.dataset.a === k)); $("#fSignup").style.display = k === "signup" ? "" : "none"; $("#fLogin").style.display = k === "login" ? "" : "none"; };
+  tabs.forEach((b) => (b.onclick = () => show(b.dataset.a)));
+  if (location.hash === "#login") show("login");
+  async function post(url, body, btn, err) {
+    btn.disabled = true; err.textContent = "";
+    try {
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.detail || "Something went wrong.");
+      location.replace("/app");
+    } catch (e) { err.textContent = e.message === "Failed to fetch" ? "Can't reach the server. Try again in a moment." : e.message; btn.disabled = false; }
+  }
+  $("#fSignup").onsubmit = (e) => { e.preventDefault(); post("/api/auth/signup", { name: $("#suName").value, email: $("#suEmail").value, password: $("#suPw").value, adult: $("#suAdult").checked, acceptTerms: $("#suTerms").checked }, $("#suBtn"), $("#suErr")); };
+  $("#fLogin").onsubmit = (e) => { e.preventDefault(); post("/api/auth/login", { email: $("#liEmail").value, password: $("#liPw").value }, $("#liBtn"), $("#liErr")); };
+  $("#suPw").oninput = () => { const v = $("#suPw").value, ok = v.length >= 8 && /[a-z]/i.test(v) && /\d/.test(v); $("#pwHint").textContent = ok ? "✓ strong enough" : "(8+ characters, a letter and a number)"; $("#pwHint").className = ok ? "up" : "dim"; };
+})();
+</script>
+</body>
+</html>

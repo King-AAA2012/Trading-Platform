@@ -1,11 +1,60 @@
-# TradeScope: dual-monitor market research platform
+# CasuallyHedge: Trading, for the little guy.
 
-A free, local research terminal for beginners and pros. It scans **every major stock market in the world** plus crypto,
+A market research platform for beginners and pros, run locally or as a subscription website. It scans **every major stock market in the world** plus crypto,
 FX, commodities, bonds and ETFs, rates every instrument with its own multi-factor algorithm, tells you **what to buy,
 short or avoid, and exactly how much** for your budget, builds a **multi-market daily portfolio plan**, answers
 **"what if…?" scenarios**, and explains everything with a **local AI** that never sends your data anywhere.
 
-> **Research only.** TradeScope has no broker connection and cannot place trades. Nothing here is financial advice.
+> **Research only.** CasuallyHedge has no broker connection and cannot place trades. Nothing here is financial advice.
+
+
+## Running CasuallyHedge as a website
+
+CasuallyHedge now has accounts, a 30-day free trial, paid plans ($20/month or $200/year via Razorpay), private
+per-user data, a first-visit beta and risk notice, and legal pages at `/legal/terms`, `/legal/privacy`,
+`/legal/disclaimer`, `/legal/refund` and `/legal/contact`.
+
+### Before you launch: checklist
+
+1. **Talk to a lawyer.** Selling stock research or recommendations is regulated. In India that generally means
+   **SEBI Research Analyst registration**; other countries have similar rules. Have the legal templates in
+   `backend/legal/` reviewed, fill in the `[placeholders]`, and remove the yellow "template notice" boxes.
+2. **Licensed market data.** The built-in Yahoo Finance feed is free but **not licensed for commercial use**. Before
+   charging users, switch `backend/data.py` to a licensed provider (for example Twelve Data, Polygon, Finnhub, EODHD,
+   or an NSE/BSE-authorised vendor for Indian real-time data). The Terms already disclose that data may be delayed.
+3. **Fill in `.env`.** Copy `.env.example` to `.env` and set your company email, legal name and address, prices and
+   Razorpay keys. `COMPANY_EMAIL` appears in the beta pop-up (the bug-report address), the footer and every legal page.
+4. **Razorpay.**
+   - Create API keys (start with test mode).
+   - Enable International Payments if you charge in USD.
+   - Add a webhook to `https://YOUR-DOMAIN/api/billing/webhook` for `payment.captured` and `order.paid`.
+   - Razorpay's website review will check the Terms, Privacy, Refund and Contact pages, which are included.
+5. **Host it.**
+   - Server: a VPS with 4+ vCPU and 8+ GB RAM if you want the AI; a GPU makes it much faster.
+   - Setup: install Python, `pip install -r requirements.txt`, and install Ollama plus `ollama pull llama3.1:8b`.
+   - Run it: `python -m uvicorn backend.app:app --host 127.0.0.1 --port 8420 --proxy-headers` under systemd.
+   - HTTPS: put **Caddy** in front, which gets a certificate automatically. A two-line Caddyfile:
+     `your-domain.com` then `reverse_proxy 127.0.0.1:8420`. Set `COOKIE_SECURE=1`.
+6. **Back up `data/app.db`** (accounts, portfolios, payments) regularly.
+
+### How accounts and privacy work
+- Passwords are hashed with scrypt, and sessions are random tokens in HttpOnly cookies (only a hash is stored).
+  Logins are rate-limited, and cross-site form posts are blocked.
+- Every user's settings, holdings, watchlists, alerts, notes and journal are stored against their account in
+  `data/app.db`, and every request can only read or write the logged-in user's data. Users can download or delete
+  all their data from the Account page.
+- After the trial, the app and its APIs are locked until the user pays. Their data is kept safe until then.
+- Payments are verified server-side (Razorpay HMAC signature), and the webhook makes activation reliable. Each
+  payment extends access by 30 or 365 days from the later of now, the trial end or the current paid period. Plans
+  don't auto-renew.
+- The very first account created inherits the data from the old single-user `data/state.json`.
+- Forgotten passwords are currently reset by email to your support address; automated reset emails need an email
+  (SMTP) service.
+
+### Near-live data
+Quotes refresh every 10 seconds on the server and every 15–20 seconds in the browser. Open research charts update
+today's candle live. Daily data refreshes every 90 seconds, and scans every 3 minutes. Yahoo's data is real-time for
+some exchanges and **delayed 15+ minutes** for others, which the Terms, Risk Disclaimer and beta pop-up all state.
 
 ## What it costs: $0
 
@@ -34,9 +83,9 @@ Yahoo's endpoints are unofficial, so data can be delayed or occasionally unavail
 Manual start: `pip install -r requirements.txt` then `python -m uvicorn backend.app:app --port 8420`.
 
 **Keep the server running while you use the app.** `start.bat` shows a black window. Minimise it rather than closing it,
-because closing it stops TradeScope. If the server ever crashes, it restarts on its own, and the pages reconnect
+because closing it stops CasuallyHedge. If the server ever crashes, it restarts on its own, and the pages reconnect
 automatically: a yellow "reconnecting" banner shows, then everything continues. Prefer no window at all? Double-click
-**`TradeScope (no window).vbs`** to run it in the background, and **`Stop TradeScope.bat`** to stop it.
+**`CasuallyHedge (no window).vbs`** to run it in the background, and **`Stop CasuallyHedge.bat`** to stop it.
 
 The layout adapts to your screen. Full-HD dual monitors get everything side by side; laptops (1366×768, 1280×720)
 get tighter columns; small windows switch to a scrolling layout. Popovers such as the market picker always fit on screen.
@@ -46,7 +95,7 @@ get tighter columns; small windows switch to a scrolling layout. Popovers such a
 | Monitor 1: **Command Center** | Monitor 2: **Research** |
 |---|---|
 | Global macro ticker (indices, VIX, yields, dollar, gold, oil, BTC) | Candlestick chart with EMA 20/50/200, Bollinger, volume, buy/sell markers, entry/stop/target lines |
-| Market pulse: model breadth and risk-on/off regime | RSI, MACD and the **TradeScope Score** history panes (Pro mode) |
+| Market pulse: model breadth and risk-on/off regime | RSI, MACD and the **CasuallyHedge Score** history panes (Pro mode) |
 | Sector heatmap and watchlist | Recommendation card: action, **how many units**, cost, stop, targets, P&L at each level |
 | Opportunity scanner: Top Buys / Shorts, score, signal, setup, confidence, suggested size | Tabs: Why (factor bars + reasons + risks), Fundamentals, Backtest, News, ✨ AI Analyst chat |
 | Budget & risk profile, holdings, **Today's Portfolio Plan** | 📄 printable report (Save as PDF) |
@@ -129,7 +178,7 @@ a search box with autocomplete. Every plan action has a **✓ Add to holdings** 
 
 ## One monitor or two
 
-TradeScope detects your screens. With two monitors, double-clicking any stock opens the Research screen on the second
+CasuallyHedge detects your screens. With two monitors, double-clicking any stock opens the Research screen on the second
 one. With one monitor it opens as a full popup over the Command screen (Esc closes it). Click selects; double-click
 opens.
 
@@ -241,7 +290,7 @@ if still strong and underweight), then fills free slots with the best new ideas.
 
 ## Local AI
 
-Uses Ollama (`llama3.1:8b` preferred, falls back to any installed chat model; override with `TRADESCOPE_MODEL`).
+Uses Ollama (`llama3.1:8b` preferred, falls back to any installed chat model; override with `CASUALLYHEDGE_MODEL`).
 The AI only sees numbers the engine computed plus headlines, and it's instructed never to invent data. Without Ollama,
 a rules-based report is shown instead.
 

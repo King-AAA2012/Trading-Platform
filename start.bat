@@ -1,8 +1,8 @@
 @echo off
-title TradeScope
+title CasuallyHedge
 cd /d "%~dp0"
 echo.
-echo  TradeScope - 100%% free, runs on your own PC. No accounts, no API keys, no subscriptions.
+echo  CasuallyHedge - Trading, for the little guy.  (beta)
 echo.
 
 where python >nul 2>nul || (
@@ -31,16 +31,17 @@ if not errorlevel 1 (
   )
 )
 
-rem ---- stop any older TradeScope server still holding port 8420, so the latest version always runs
+rem ---- stop any older CasuallyHedge server still holding port 8420, so the latest version always runs
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":8420 .*LISTENING"') do taskkill /F /PID %%p >nul 2>nul
 
 start "" http://127.0.0.1:8420/
 echo.
-echo  TradeScope is running at http://127.0.0.1:8420  -  keep this window open (minimise it).
-echo  Close this window to stop TradeScope.
+echo  CasuallyHedge is running at http://127.0.0.1:8420  -  keep this window open (minimise it).
+echo  Close this window to stop CasuallyHedge.
 echo.
 :serve
-python -m uvicorn backend.app:app --host 127.0.0.1 --port 8420
+if not defined CH_HOST set CH_HOST=127.0.0.1
+python -m uvicorn backend.app:app --host %CH_HOST% --port 8420 --proxy-headers
 echo  Server stopped unexpectedly - restarting in 3 seconds...
 timeout /t 3 >nul
 goto serve

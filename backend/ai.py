@@ -9,7 +9,7 @@ import requests
 
 OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 PREFERRED = ["llama3.1:8b", "llama3.1:latest", "qwen2.5:7b", "llama3:latest", "mistral:latest", "qwen3.5:0.8b"]
-SYSTEM = ("You are TradeScope's research analyst. You explain stock, crypto, FX and commodity setups clearly for both beginners "
+SYSTEM = ("You are CasuallyHedge's research analyst. You explain stock, crypto, FX and commodity setups clearly for both beginners "
           "and professionals. Use ONLY the data provided; never invent numbers, news or events. Be specific, balanced and concise. "
           "Always mention the key risk and the stop level. This is a research tool: never tell the user to place a trade with a broker, "
           "and remind them it is not financial advice in one short line at the end.")
@@ -22,7 +22,7 @@ def status() -> dict:
     except Exception:
         return {"online": False, "model": None, "models": []}
     chat = [m for m in models if "embed" not in m]
-    pick = os.environ.get("TRADESCOPE_MODEL") or next((m for m in PREFERRED if m in chat), chat[0] if chat else None)
+    pick = os.environ.get("CASUALLYHEDGE_MODEL") or next((m for m in PREFERRED if m in chat), chat[0] if chat else None)
     return {"online": bool(pick), "model": pick, "models": chat}
 
 

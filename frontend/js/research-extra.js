@@ -306,7 +306,7 @@ window.RX = (() => {
       document.querySelectorAll("[data-rmal]").forEach((b) => (b.onclick = async () => { await saveState({ alerts: (R.state.alerts || []).filter((x) => x.id !== b.dataset.rmal) }); tabs.tools(); }));
       let nt;
       $("#noteBox").oninput = () => { clearTimeout(nt); nt = setTimeout(() => saveState({ notes: { ...(R.state.notes || {}), [A.symbol]: $("#noteBox").value } }), 600); };
-      $("#cpSum").onclick = () => UX.copy(`${A.name} (${A.symbol}) ${price(A.price)} ${A.currency}\nSignal: ${A.signal} (score ${A.score.toFixed(0)}, confidence ${A.confidence.toFixed(0)}%) · ${A.setup}\nEntry ${price(lv.entryLow)}–${price(lv.entryHigh)} · stop ${price(lv.stop)} · targets ${price(lv.t1)} / ${price(lv.t2)}\n${A.reasons.slice(0, 4).map((r) => "• " + r.text).join("\n")}\n(TradeScope research, not financial advice)`, "Summary copied");
+      $("#cpSum").onclick = () => UX.copy(`${A.name} (${A.symbol}) ${price(A.price)} ${A.currency}\nSignal: ${A.signal} (score ${A.score.toFixed(0)}, confidence ${A.confidence.toFixed(0)}%) · ${A.setup}\nEntry ${price(lv.entryLow)}–${price(lv.entryHigh)} · stop ${price(lv.stop)} · targets ${price(lv.t1)} / ${price(lv.t2)}\n${A.reasons.slice(0, 4).map((r) => "• " + r.text).join("\n")}\n(CasuallyHedge research, not financial advice)`, "Summary copied");
       $("#cpLink").onclick = () => UX.copy(`${location.origin}/research.html?symbol=${encodeURIComponent(A.symbol)}`, "Link copied");
       $("#glo").onclick = () => UX.showGlossary();
     },
@@ -319,6 +319,28 @@ window.RX = (() => {
       <div style="position:absolute;top:6px;left:calc(${pos(f.targetMean)}% - 6px);width:12px;height:18px;border-radius:3px;border:2px solid var(--accent)" data-tip="Average target ${price(f.targetMean)}"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:11px" class="num"><span class="down">low ${price(f.targetLow)}</span><span>avg ${price(f.targetMean)} (${pct((f.targetMean / px - 1) * 100, 1)})</span><span class="up">high ${price(f.targetHigh)}</span></div>`;
   }
+
+  // ---------------- near-live price: refresh the quote and today's candle every 15s
+  async function tickLive() {
+    const A = R.A;
+    if (!A || document.hidden) return;
+    const q = (await api("/api/quotes?symbols=" + encodeURIComponent(A.symbol)).catch(() => []))[0];
+    if (!q || !q.price) return;
+    const st = { REGULAR: "Live", PRE: "Pre-market", POST: "After-hours", PREPRE: "Closed", POSTPOST: "Closed", CLOSED: "Closed" }[q.marketState] || "Live";
+    $("#liveTxt").textContent = `${st} · ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+    $("#livePx .dot").className = "dot " + (st === "Live" ? "on" : "");
+    const px = document.querySelector("#quote .px"), ch = document.querySelector("#quote .px + .num");
+    if (px) { px.textContent = price(q.price); px.style.transition = "color .6s"; px.style.color = q.price >= A.price ? "var(--up)" : "var(--down)"; setTimeout(() => (px.style.color = ""), 700); }
+    if (ch) { ch.textContent = pct(q.changePct); ch.className = "num " + cls(q.changePct); }
+    const s = A.series, n = s && s.t.length;
+    if (n && R.tf !== "1D" && R.tf !== "5D" && $("#ctype").value === "candle") {
+      const i = n - 1;
+      s.c[i] = q.price; s.h[i] = Math.max(s.h[i], q.price); s.l[i] = Math.min(s.l[i], q.price);
+      R.candle.update({ time: s.t[i], open: s.o[i], high: s.h[i], low: s.l[i], close: q.price });
+    }
+    A.price = q.price;
+  }
+  setInterval(tickLive, 15000);
 
   return { afterDraw, markers, onLoad, tabs };
 })();

@@ -39,7 +39,7 @@
       }
     } catch {}
     const url = "/research.html" + (symbol ? `?symbol=${encodeURIComponent(symbol)}&market=${state.lastMarket}` : "");
-    const w = window.open(url, "tradescope-research", features);
+    const w = window.open(url, "ch-research", features);
     if (!w) { TS.toast("Pop-up window blocked, so showing research here instead."); openOverlay(symbol); }
   }
   function openOverlay(symbol) {
@@ -97,8 +97,13 @@
     renderWatch();
     loadScan();
     loadMacro();
-    setInterval(loadMacro, 60000);
-    setInterval(renderWatch, 60000);
+    setInterval(loadMacro, 20000);          // near-live ticker strip
+    setInterval(renderWatch, 20000);        // near-live watchlist
+    api("/api/me").then((me) => {
+      const a = me.access;
+      $("#acctTxt").textContent = a.state === "trial" ? `Trial · ${a.trialDaysLeft}d left` : a.state === "paid" ? "Pro" : a.state === "comp" ? "Account" : "Subscribe";
+      if (a.state === "trial" && a.trialDaysLeft <= 5) $("#acctBtn").classList.add("primary");
+    }).catch(() => {});
     TS.aiStatus($("#aist"));
     TS.bindSearch($("#q"), $("#qres"), (s) => openDetail(s));
   }
@@ -413,7 +418,7 @@
     const csv = "symbol,qty,avg_cost,side\n" + state.holdings.map((h) => [h.symbol, h.qty, h.avgCost ?? "", h.side || "long"].join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "tradescope-holdings.csv";
+    a.download = "casuallyhedge-holdings.csv";
     a.click();
   };
 
@@ -469,7 +474,7 @@
           ${APPLY[x.action] && x.qty > 0 ? `<button class="btn sm ok" data-apply="${i}">${APPLY[x.action]}</button>` : ""}</div>
         <div class="r num" style="text-align:right"><b>${x.qty ?? ""}</b><div class="dim" style="font-size:11px">${money(x.value, c)}</div><div class="dim" style="font-size:10.5px">@ ${price(x.price)}</div></div></div>`).join("") || '<div class="empty">No actions today. Sit tight; not trading is also a position.</div>'}
       ${(p.queued || []).length ? `<div class="muted" style="margin:10px 0 4px;font-size:11px">QUEUED FOR NEXT SESSIONS (daily limit / cash)</div>` + p.queued.map((q) => `<span class="pill" style="margin:2px">${esc(q.action)} ${q.qty} ${esc(disp(q.symbol))}</span>`).join("") : ""}
-      <p class="disclaimer">Research tool only. TradeScope never places trades. "Add to holdings" only records the position here for tracking.</p>`;
+      <p class="disclaimer">Research tool only. CasuallyHedge never places trades. "Add to holdings" only records the position here for tracking.</p>`;
     bindRows($("#plan"), ".act");
     $("#plan").querySelectorAll("[data-apply]").forEach((b) => (b.onclick = () => applyActions([+b.dataset.apply])));
     if ($("#applyAll")) $("#applyAll").onclick = () => {

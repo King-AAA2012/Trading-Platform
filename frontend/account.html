@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account · CasuallyHedge</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b8cff'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none'/></svg>">
+<link rel="stylesheet" href="/css/app.css?v=6">
+<style>
+  body { overflow: auto; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 22px 20px 50px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .card h3 { margin: 0 0 10px; font-size: 15px; }
+  .plan { border: 1px solid var(--line2); border-radius: 12px; padding: 16px; text-align: center; }
+  .plan.best { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .plan .amt { font-size: 30px; font-weight: 800; font-family: var(--mono); margin: 6px 0; }
+  .status { font-size: 20px; font-weight: 700; }
+  .top { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="top"><a href="/app" class="brand" style="color:var(--text)"><div class="logo">▲</div>CasuallyHedge <small>Account</small></a><span class="spacer"></span>
+  <a class="btn sm" href="/app" id="backApp">← Back to the app</a><button class="btn sm ghost" id="logout">Log out</button></div>
+<div class="wrap">
+  <div id="expiredNote" class="hint" style="display:none;margin-bottom:14px;border-color:var(--warn);color:var(--text)">⏳ <b>Your free trial has ended.</b> Choose a plan below to keep using CasuallyHedge. Your portfolio, watchlists and settings are saved and waiting for you.</div>
+  <div class="card" style="margin-bottom:14px"><div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <div><div class="muted" style="font-size:12px">Signed in as</div><b id="who">…</b></div><span class="spacer"></span>
+    <div style="text-align:right"><div class="muted" style="font-size:12px">Plan status</div><div class="status" id="status">…</div><div class="dim" id="statusSub" style="font-size:12px"></div></div></div></div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h3>Choose a plan</h3>
+    <div class="grid2">
+      <div class="plan"><div class="muted">Monthly</div><div class="amt" id="amtM">$20</div><div class="dim">30 days of full access</div><button class="btn primary" style="margin-top:10px;width:100%" data-plan="monthly">Pay monthly</button></div>
+      <div class="plan best"><div class="muted">Yearly · best value</div><div class="amt" id="amtY">$200</div><div class="dim">365 days · 2 months free</div><button class="btn primary" style="margin-top:10px;width:100%" data-plan="yearly">Pay yearly</button></div>
+    </div>
+    <div class="dim" style="font-size:12px;margin-top:10px">Secure payments by Razorpay. Plans are prepaid and <b>don't auto-renew</b>. Paying during your trial adds the time after your trial ends. <a href="/legal/refund">Refund policy</a>.</div>
+    <div class="err down" id="payErr" style="font-size:12.5px;margin-top:6px"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card"><h3>Payment history</h3><div id="pays" class="muted" style="font-size:13px">No payments yet.</div></div>
+    <div class="card"><h3>Change password</h3>
+      <input class="in" id="pwCur" type="password" placeholder="Current password" autocomplete="current-password" style="margin-bottom:6px">
+      <input class="in" id="pwNew" type="password" placeholder="New password (8+ chars, letter + number)" autocomplete="new-password" style="margin-bottom:6px">
+      <button class="btn" id="pwGo">Update password</button><div id="pwMsg" style="font-size:12.5px;margin-top:6px"></div></div>
+    <div class="card"><h3>Your data</h3><p class="muted" style="font-size:13px;margin-top:0">Your portfolio, holdings, notes and settings are private to your account. Download everything we store about you at any time.</p><a class="btn" href="/api/me/export">⬇ Download my data</a></div>
+    <div class="card"><h3 class="down">Delete account</h3><p class="muted" style="font-size:13px;margin-top:0">Permanently deletes your account, portfolio and settings. This can't be undone.</p>
+      <input class="in" id="delPw" type="password" placeholder="Confirm with your password" style="margin-bottom:6px"><button class="btn" id="delGo" style="color:var(--down)">Delete my account</button><div id="delMsg" class="down" style="font-size:12.5px;margin-top:6px"></div></div>
+  </div>
+  <p class="disclaimer" style="margin-top:18px">Questions or found a bug? Email <a class="co-email" href="#"></a> · <a href="/legal/terms">Terms</a> · <a href="/legal/privacy">Privacy</a> · <a href="/legal/disclaimer">Risk Disclaimer</a></p>
+</div>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="/js/ux.js?v=6"></script>
+<script>
+(async () => {
+  const $ = (s) => document.querySelector(s);
+  const J = async (url, body) => {
+    const r = await fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) { location.replace("/login.html#login"); throw new Error("login"); }
+    if (!r.ok) throw new Error(j.detail || "Something went wrong.");
+    return j;
+  };
+  const [me, cfg] = await Promise.all([J("/api/me"), J("/api/config")]);
+  let bill = await J("/api/billing/status");
+  const money = (v) => new Intl.NumberFormat(undefined, { style: "currency", currency: cfg.currency }).format(v / 100);
+  document.querySelectorAll(".co-email").forEach((a) => { a.textContent = cfg.email; a.href = "mailto:" + cfg.email; });
+  $("#who").textContent = me.email; $("#amtM").textContent = money(cfg.monthly); $("#amtY").textContent = money(cfg.yearly);
+  if (new URLSearchParams(location.search).get("expired") || !me.access.active) { $("#expiredNote").style.display = ""; $("#backApp").style.display = me.access.active ? "" : "none"; }
+  function renderStatus(a) {
+    const d = (t) => new Date(t * 1000).toLocaleDateString();
+    const map = { trial: [`Free trial · ${a.trialDaysLeft} day${a.trialDaysLeft === 1 ? "" : "s"} left`, `Trial ends ${d(a.trialEnd)}`, "warn"], paid: [`${(a.plan || "").replace(/^./, (c) => c.toUpperCase())} plan · active`, `Paid through ${d(a.paidUntil)}`, "up"],
+      comp: ["Complimentary access", "Free forever", "up"], expired: ["Trial ended", "Choose a plan to continue", "down"] };
+    const [t, s, c] = map[a.state];
+    $("#status").textContent = t; $("#status").className = "status " + c; $("#statusSub").textContent = s;
+  }
+  function renderPays(ps) {
+    $("#pays").innerHTML = ps.length ? `<table class="t"><thead><tr><th>Date</th><th>Plan</th><th class="r">Amount</th><th>Status</th></tr></thead><tbody>${ps.map((p) => `<tr><td>${new Date((p.paid_at || p.created) * 1000).toLocaleDateString()}</td><td>${p.plan}</td><td class="r num">${new Intl.NumberFormat(undefined, { style: "currency", currency: p.currency }).format(p.amount / 100)}</td><td class="${p.status === "paid" ? "up" : "muted"}">${p.status}</td></tr>`).join("")}</tbody></table>` : "No payments yet.";
+  }
+  renderStatus(me.access); renderPays(bill.payments);
+  if (!bill.configured) $("#payErr").textContent = `Online payments aren't switched on yet. Please contact ${cfg.email} to subscribe.`;
+  document.querySelectorAll("[data-plan]").forEach((b) => (b.onclick = async () => {
+    $("#payErr").textContent = "";
+    let o;
+    try { o = await J("/api/billing/order", { plan: b.dataset.plan }); } catch (e) { $("#payErr").textContent = e.message; return; }
+    const rz = new Razorpay({
+      key: o.keyId, order_id: o.orderId, amount: o.amount, currency: o.currency, name: o.name, description: o.description,
+      prefill: { email: o.email, name: o.userName }, theme: { color: "#5b8cff" },
+      handler: async (resp) => {
+        try { const v = await J("/api/billing/verify", resp); renderStatus(v.access); bill = await J("/api/billing/status"); renderPays(bill.payments); $("#expiredNote").style.display = "none"; $("#backApp").style.display = ""; UX.modal("🎉 Thank you!", `<p>Your ${b.dataset.plan} plan is active. Happy researching!</p><a class="btn primary" href="/app">Go to the app</a>`); }
+        catch (e) { $("#payErr").textContent = e.message; }
+      },
+      modal: { ondismiss: () => {} },
+    });
+    rz.on("payment.failed", (r) => { $("#payErr").textContent = "Payment failed: " + (r.error?.description || "please try again."); });
+    rz.open();
+  }));
+  $("#logout").onclick = async () => { await fetch("/api/auth/logout", { method: "POST" }); location.replace("/login.html#login"); };
+  $("#pwGo").onclick = async () => { try { await J("/api/me/password", { current: $("#pwCur").value, new: $("#pwNew").value }); $("#pwMsg").innerHTML = '<span class="up">Password updated. Other devices were logged out.</span>'; $("#pwCur").value = $("#pwNew").value = ""; } catch (e) { $("#pwMsg").innerHTML = `<span class="down">${UX.esc(e.message)}</span>`; } };
+  $("#delGo").onclick = async () => { if (!confirm("Permanently delete your account and all your data?")) return; try { await J("/api/me/delete", { password: $("#delPw").value }); location.replace("/login.html"); } catch (e) { $("#delMsg").textContent = e.message; } };
+})();
+</script>
+</body>
+</html>

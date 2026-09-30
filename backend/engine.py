@@ -1,4 +1,4 @@
-"""TradeScope Alpha engine.
+"""CasuallyHedge Alpha engine.
 
 Seven technical factors, each scaled to [-1, +1], are computed for EVERY bar of history (vectorised), blended into a
 composite score in [-100, +100]. Because the score exists for every past day, each recommendation carries its own

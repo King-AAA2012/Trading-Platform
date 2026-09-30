@@ -94,7 +94,7 @@ window.CX = (() => {
   $("#csvBtn").onclick = () => {
     const rows = C.visibleRows || [];
     const cols = ["symbol", "name", "price", "currency", "changePct", "score", "signal", "setup", "confidence", "rsi", "atrPct", "ret1m", "ret3m", "ret1y", "sector"];
-    UX.download(`tradescope-${C.state.lastMarket}-${new Date().toISOString().slice(0, 10)}.csv`, cols.join(",") + "\n" + rows.map((r) => cols.map((k) => JSON.stringify(r[k] ?? "")).join(",")).join("\n"), "text/csv");
+    UX.download(`casuallyhedge-${C.state.lastMarket}-${new Date().toISOString().slice(0, 10)}.csv`, cols.join(",") + "\n" + rows.map((r) => cols.map((k) => JSON.stringify(r[k] ?? "")).join(",")).join("\n"), "text/csv");
   };
   let autoT = null;
   $("#autoBtn").onclick = () => {
@@ -204,7 +204,7 @@ window.CX = (() => {
       if (hit) {
         a.active = false; a.triggered = Date.now(); changed = true;
         const msg = `${a.symbol} ${a.kind.startsWith("score") ? `score ${sc?.toFixed(0)}` : `price ${price(px)}`} is ${a.kind.includes("above") ? "above" : "below"} ${price(a.value)}`;
-        UX.notify("🔔 TradeScope alert", msg);
+        UX.notify("🔔 CasuallyHedge alert", msg);
         TS.toast("🔔 " + msg, 6000);
       }
     }
@@ -327,7 +327,7 @@ window.CX = (() => {
     if (which === "backup") {
       tb.innerHTML = `<div class="hint">Everything (settings, holdings, watchlists, alerts, notes, journal, saved screens) lives in <code>data/state.json</code> on this PC. Download a backup or restore one here.</div>
         <div style="display:flex;gap:8px;margin:10px 0"><button class="btn primary" id="bkDl">⬇ Download backup</button><button class="btn" id="bkUp">⬆ Restore from pasted backup</button></div><textarea class="in mono" id="bkTxt" rows="8" placeholder="Paste a backup JSON here to restore"></textarea>`;
-      $("#bkDl").onclick = async () => UX.download(`tradescope-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(await api("/api/state"), null, 1), "application/json");
+      $("#bkDl").onclick = async () => UX.download(`casuallyhedge-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(await api("/api/state"), null, 1), "application/json");
       $("#bkUp").onclick = async () => {
         let j; try { j = JSON.parse($("#bkTxt").value); } catch { return TS.toast("That isn't valid JSON"); }
         if (!confirm("Replace your current settings, holdings and lists with this backup?")) return;
@@ -419,7 +419,7 @@ window.CX = (() => {
   }
   $("#helpBtn").onclick = () => {
     const b = UX.modal("❓ Help", `<div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn primary" id="hTour">🧭 Take the guided tour</button><button class="btn" id="hKeys">⌨ Keyboard shortcuts</button><button class="btn" id="hGlo">📖 Glossary</button></div>
-      <div class="muted" style="font-size:12.5px">TradeScope is a research tool. It never places trades. Everything runs on your PC with free public data and a local AI.</div>`);
+      <div class="muted" style="font-size:12.5px">CasuallyHedge is a research tool. It never places trades. Everything runs on your PC with free public data and a local AI.</div>`);
     b.querySelector("#hTour").onclick = () => { document.getElementById("ux-modal").classList.remove("show"); tour(0); };
     b.querySelector("#hKeys").onclick = () => UX.showShortcuts();
     b.querySelector("#hGlo").onclick = () => UX.showGlossary();
@@ -446,7 +446,11 @@ window.CX = (() => {
     if (!C.state) return;
     clearInterval(boot);
     renderLists(); alertCount(); C.renderWatch();
-    if (!ls("ts-tour", 0) && TS.mode() === "beginner") setTimeout(() => tour(0), 1500);
+    if (!ls("ts-tour", 0) && TS.mode() === "beginner") {
+      const start = () => setTimeout(() => tour(0), 600);
+      let acked = false; try { acked = !!localStorage.getItem("ch-beta-ack"); } catch {}
+      acked ? setTimeout(() => tour(0), 1500) : window.addEventListener("ch-beta-ack", start, { once: true });   // tour starts after the beta notice
+    }
   }, 200);
 
   return { filter, syncFilterBar, renderOverview, currentList, listName, saveList, openTools, openAlerts, tour };

@@ -1,11 +1,15 @@
-"""Tiny JSON persistence for the user's profile, holdings, watchlist and portfolio markets (data/state.json)."""
+"""Per-user private app state (profile, holdings, watchlists, alerts, notes, journal, saved screens).
+
+The logged-in user for the current request is held in a context variable set by the auth middleware, so every
+load()/save() reads and writes only that user's row in data/app.db. Nothing is shared between accounts.
+data/state.json is the old single-user file; it is imported into the very first account created."""
+import contextvars
 import json
-import threading
 
 from .data import DATA_DIR
 
-PATH = DATA_DIR / "state.json"
-_lock = threading.Lock()
+PATH = DATA_DIR / "state.json"          # legacy single-user state (imported once, see auth.signup)
+current_uid: contextvars.ContextVar = contextvars.ContextVar("current_uid", default=None)
 DEFAULT = {
     "profile": {"budget": 10000, "currency": "USD", "risk": "balanced", "allowShorts": False, "fractional": False,
                 "dailyLimit": 2500, "cash": None, "experience": "beginner"},
@@ -22,11 +26,9 @@ DEFAULT = {
 
 
 def load() -> dict:
-    with _lock:
-        try:
-            st = json.loads(PATH.read_text("utf-8"))
-        except Exception:
-            st = {}
+    from . import db
+    uid = current_uid.get()
+    st = (db.get_state(uid) if uid else None) or {}
     out = json.loads(json.dumps(DEFAULT))
     out.update(st)
     out["profile"] = {**DEFAULT["profile"], **st.get("profile", {})}
@@ -34,7 +36,7 @@ def load() -> dict:
 
 
 def save(st: dict) -> None:
-    with _lock:
-        tmp = PATH.with_suffix(".tmp")
-        tmp.write_text(json.dumps(st, indent=1), "utf-8")
-        tmp.replace(PATH)
+    from . import db
+    uid = current_uid.get()
+    if uid:                       # anonymous requests never persist anything
+        db.put_state(uid, st)

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TradeScope · Command</title>
+<title>CasuallyHedge · Trading, for the little guy</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b8cff'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none'/></svg>">
 <link rel="stylesheet" href="/css/app.css?v=5">
 <style>
@@ -120,7 +120,7 @@
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand"><div class="logo">▲</div>TradeScope <small>Command Center</small></div>
+    <div class="brand"><div class="logo">▲</div>CasuallyHedge <small>Trading, for the little guy.</small></div>
     <select id="market" class="in" style="width:250px"></select>
     <div class="search"><span class="ico">⌕</span><input id="q" class="in" placeholder="Search any stock, ETF, crypto, FX…  ( / )" autocomplete="off"><div id="qres" class="results"></div></div>
     <div class="spacer"></div>
@@ -129,6 +129,8 @@
     <button class="btn sm" id="toolsBtn" data-tip="Calculators, compare, backtester, goal planner, glossary… (T)">🧰 Tools</button>
     <button class="btn sm ghost" id="themeBtn" data-tip="Light / dark theme">🌓</button>
     <button class="btn sm ghost" id="helpBtn" data-tip="Keyboard shortcuts & guided tour">❓</button>
+    <span class="pill" id="liveBadge" data-tip="Prices refresh every 10–20 seconds while you use CasuallyHedge. Data is near-live, not guaranteed real-time: some exchanges are delayed 15+ minutes. Always confirm with your broker (Terms §4)."><span class="dot on"></span>Near-live</span>
+    <a class="btn sm" id="acctBtn" href="/account.html" data-tip="Your plan, billing and account">👤 <span id="acctTxt">Account</span></a>
     <span id="aist" class="pill"><span class="dot"></span>AI…</span>
     <div class="seg"><button data-mode="beginner">Beginner</button><button data-mode="pro">Pro</button></div>
     <button class="btn primary" id="openResearch" title="Opens on your second monitor when the browser allows it">⧉ Open Research Screen</button>
@@ -239,7 +241,7 @@
 
 <!-- holdings -->
 <div class="modal-bg" id="holdModal"><div class="modal hmodal">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><h3 style="margin:0">💼 My Holdings</h3><div class="tabs" id="hTabs"><button data-h="pos" class="on">Positions</button><button data-h="ana">Analytics</button><button data-h="jr">Journal</button></div><span class="muted" style="font-size:12px">Tracking only. TradeScope never places orders.</span><span class="spacer"></span>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><h3 style="margin:0">💼 My Holdings</h3><div class="tabs" id="hTabs"><button data-h="pos" class="on">Positions</button><button data-h="ana">Analytics</button><button data-h="jr">Journal</button></div><span class="muted" style="font-size:12px">Tracking only. CasuallyHedge never places orders.</span><span class="spacer"></span>
     <button class="btn sm" id="hImport">⬆ Import CSV</button><button class="btn sm" id="hExport">⬇ Export CSV</button><button class="btn sm ghost" data-close>✕ Close</button></div>
   <div id="hAna" style="display:none"></div><div id="hJr" style="display:none"></div>
   <div id="hPos">

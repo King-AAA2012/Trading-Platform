@@ -85,7 +85,7 @@ const UX = (() => {
     "Bollinger Bands": "A band 2 standard deviations around the 20-day average. Touching the edges means the price is stretched.",
     "Breakout": "Price closing above a recent high (or below a recent low), often the start of a new move.",
     "CAGR": "Compound annual growth rate: the steady yearly return that would produce the same total result.",
-    "Conviction": "How strongly TradeScope's ten-agent committee agrees on an idea, adjusted for data quality.",
+    "Conviction": "How strongly CasuallyHedge's ten-agent committee agrees on an idea, adjusted for data quality.",
     "Correlation": "How closely two investments move together, from -1 (opposite) to +1 (identical). Low correlation diversifies.",
     "CVaR / Expected shortfall": "The average loss on the worst days (for example, the worst 5%).",
     "Diversification ratio": "Weighted average risk of the holdings divided by portfolio risk. Higher means they offset each other.",
@@ -168,4 +168,44 @@ const UX = (() => {
   }
 
   return { esc, modal, shortcut, showShortcuts, showGlossary, toggleTheme, toggleDensity, notify, beep, copy, download, GLOSSARY };
+})();
+
+// ---------- first-visit beta & risk notice (shown until acknowledged for the current terms version)
+(async () => {
+  if (location.pathname.startsWith("/legal/") || window.self !== window.top) return;
+  let cfg;
+  try { cfg = await fetch("/api/config").then((r) => r.json()); } catch { return; }
+  const KEY = "ch-beta-ack";
+  try { if (localStorage.getItem(KEY) === cfg.termsVersion) return; } catch {}
+  const e = UX.esc, mail = `<a href="mailto:${e(cfg.email)}">${e(cfg.email)}</a>`;
+  const bg = document.createElement("div");
+  bg.className = "modal-bg show";
+  bg.style.zIndex = "9500";
+  bg.innerHTML = `<div class="modal" style="width:min(640px,94vw)">
+    <div style="display:flex;align-items:center;gap:10px"><div class="logo" style="width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:conic-gradient(from 210deg,var(--accent),var(--accent2),var(--up),var(--accent));color:#fff">▲</div>
+      <div><h3 style="margin:0">Welcome to ${e(cfg.appName)} <span style="font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(245,185,66,.15);color:var(--warn);border:1px solid rgba(245,185,66,.4);vertical-align:middle">BETA</span></h3>
+      <div class="muted" style="font-size:12.5px">${e(cfg.motto)}</div></div></div>
+    <div style="margin:14px 0;font-size:13.5px;line-height:1.6">
+      <p style="margin:0 0 8px">Before you start, please read this:</p>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>This is beta software.</b> It may contain bugs, errors or inaccurate information, and features may change.</li>
+        <li><b>Research and education only, not financial advice.</b> Scores, signals, plans and AI answers are automated estimates, not recommendations to buy or sell. We are not a broker and cannot place trades.</li>
+        <li><b>You can lose money.</b> All investing carries risk, including the loss of everything you invest.</li>
+        <li><b>We take no responsibility for any losses</b> or missed gains from decisions you make using ${e(cfg.appName)}. You are responsible for your own decisions.</li>
+        <li><b>Market data may be delayed.</b> Prices refresh every few seconds but are not guaranteed to be real-time; some exchanges are delayed 15 minutes or more. Always confirm with your broker.</li>
+        <li><b>AI can be wrong.</b> Treat AI output as a starting point for your own research.</li>
+      </ul>
+      <div class="hint" style="margin-top:12px">🐞 <b>Found an error or bug?</b> Please tell us at ${mail}. Every report helps us improve.</div>
+      <p class="muted" style="font-size:12px;margin:10px 0 0">By continuing you agree to our <a href="/legal/terms" target="_blank">Terms of Service</a>, <a href="/legal/privacy" target="_blank">Privacy Policy</a> and <a href="/legal/disclaimer" target="_blank">Risk Disclaimer</a>.</p>
+    </div>
+    <label class="check" style="font-size:13px;color:var(--text)"><input type="checkbox" id="chAck"> I understand this is a beta research tool, not financial advice, and that ${e(cfg.appName)} takes no responsibility for losses.</label>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn primary" id="chGo" disabled>Continue</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.querySelector("#chAck").onchange = (ev) => (bg.querySelector("#chGo").disabled = !ev.target.checked);
+  bg.querySelector("#chGo").onclick = () => {
+    try { localStorage.setItem(KEY, cfg.termsVersion); } catch {}
+    fetch("/api/me/accept-terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+    bg.remove();
+    window.dispatchEvent(new Event("ch-beta-ack"));
+  };
 })();

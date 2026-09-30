@@ -34,7 +34,14 @@ _crumb: str | None = None
 _crumb_lock = threading.Lock()
 _cache: dict[str, tuple[float, object]] = {}
 _cache_lock = threading.Lock()
-POOL = ThreadPoolExecutor(max_workers=10)
+class _CtxPool(ThreadPoolExecutor):
+    """Thread pool that carries the caller's context (e.g. the logged-in user) into worker threads."""
+    def submit(self, fn, /, *args, **kwargs):
+        import contextvars
+        return super().submit(contextvars.copy_context().run, fn, *args, **kwargs)
+
+
+POOL = _CtxPool(max_workers=16)
 
 
 def cached(key: str, ttl: float, fn):
@@ -119,7 +126,8 @@ def yahoo_history(symbol: str, rng: str = "2y", interval: str = "1d") -> dict | 
             "events": {"dividends": {str(v.get("date")): (v.get("amount") or 0) / div for v in (ev.get("dividends") or {}).values()},
                        "splits": {str(v.get("date")): f"{v.get('numerator', 1):g}:{v.get('denominator', 1):g}" for v in (ev.get("splits") or {}).values()}},
         }
-    ttl = 60 if interval not in ("1d", "1wk", "1mo") else 600
+    # near-live: intraday bars refresh every 20s, daily history (whose last bar is today's live bar) every 90s
+    ttl = 20 if interval not in ("1d", "1wk", "1mo") else (90 if rng in ("5d", "1mo", "2y", "5y") else 600)
     daily = interval == "1d" and rng in ("2y", "5y")
 
     def load_or_disk():
@@ -161,7 +169,7 @@ def quotes(symbols: list[str]) -> list[dict]:
         def load():
             j = _yget("/v7/finance/quote", {"symbols": ",".join(real)}, crumb=True)
             return (j or {}).get("quoteResponse", {}).get("result")
-        for q in cached("q:" + ",".join(real), 30, load) or []:
+        for q in cached("q:" + ",".join(real), 10, load) or []:
             ccy, div = SUBUNIT.get(q.get("currency"), (q.get("currency", ""), 1.0))
             out[q["symbol"]] = {"symbol": q["symbol"], "name": q.get("shortName") or q.get("longName") or q["symbol"],
                                 "price": (q.get("regularMarketPrice") or 0) / div, "change": (q.get("regularMarketChange") or 0) / div,
