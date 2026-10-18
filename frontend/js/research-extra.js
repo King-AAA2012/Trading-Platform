@@ -256,7 +256,7 @@ window.RX = (() => {
         <table class="t"><thead><tr><th>Peer</th><th class="r">Score</th><th class="r">1M</th><th class="r">3M</th><th class="r">1Y</th><th class="r">Vol/day</th><th class="r" data-tip="Correlation of daily returns with ${esc(A.symbol)} over the past year">Corr</th></tr></thead><tbody>
         <tr style="background:var(--accent-bg)"><td><b>${esc(A.symbol)}</b> <span class="dim">(this)</span></td><td class="r num ${cls(A.score)}">${A.score.toFixed(0)}</td><td class="r num ${cls(A.ret1m)}">${pct((A.ret1m || 0) * 100, 1)}</td><td class="r num ${cls(A.ret3m)}">${pct((A.ret3m || 0) * 100, 1)}</td><td class="r num ${cls(A.ret1y)}">${A.ret1y == null ? "–" : pct(A.ret1y * 100, 1)}</td><td class="r num">${(A.atrPct * 100).toFixed(1)}%</td><td class="r">–</td></tr>
         ${e.peers.map((p) => `<tr class="row" data-s="${esc(p.symbol)}"><td><div class="sym">${esc(p.symbol)}<small>${esc(p.name)}</small></div></td><td class="r num ${cls(p.score)}">${p.score.toFixed(0)}</td><td class="r num ${cls(p.ret1m)}">${p.ret1m == null ? "–" : pct(p.ret1m * 100, 1)}</td><td class="r num ${cls(p.ret3m)}">${p.ret3m == null ? "–" : pct(p.ret3m * 100, 1)}</td><td class="r num ${cls(p.ret1y)}">${p.ret1y == null ? "–" : pct(p.ret1y * 100, 1)}</td><td class="r num">${(p.atrPct * 100).toFixed(1)}%</td><td class="r num">${corr[p.symbol] != null ? corr[p.symbol].toFixed(2) : "–"}</td></tr>`).join("")}</tbody></table>
-        <div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm" id="aiPeers">✨ AI: compare with top 2 peers</button><span class="dim" style="font-size:11px;align-self:center">Click a peer to open it.</span></div>`
+        <div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm" id="aiPeers">✨ AI: compare with top 2 peers</button><a class="btn sm" href="/chain.html?symbol=${encodeURIComponent(A.symbol)}" target="_blank">⛓ Supply chain</a><span class="dim" style="font-size:11px;align-self:center">Click a peer to open it.</span></div>`
         : `<div class="empty">Peers appear once this stock's market has been scanned on the Command screen.</div>`;
       document.querySelectorAll("#tabBody tr.row").forEach((tr) => (tr.onclick = () => { TS.send({ type: "select", symbol: tr.dataset.s, from: "research" }); location.search = `?symbol=${encodeURIComponent(tr.dataset.s)}${R.market ? "&market=" + R.market : ""}${document.body.classList.contains("embed") ? "&embed=1" : ""}`; }));
       if ($("#aiPeers")) $("#aiPeers").onclick = () => R.aiOutStream("/api/ai/compare", { symbols: [A.symbol, ...e.peers.slice(0, 2).map((p) => p.symbol)] });
@@ -341,6 +341,9 @@ window.RX = (() => {
     A.price = q.price;
   }
   setInterval(tickLive, 15000);
+  const openChain = () => R.sym && window.open(`/chain.html?symbol=${encodeURIComponent(R.sym)}`, "_blank");
+  document.getElementById("chainBtn").onclick = openChain;
+  UX.shortcut("k", "Open the supply chain", openChain);
 
   return { afterDraw, markers, onLoad, tabs };
 })();

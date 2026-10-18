@@ -254,6 +254,29 @@ opens.
 **AI assistant**
 - Floating ✨ chat on the Command screen with your plan as context.
 
+## Supply chain explorer ⛓
+
+Open it from any stock's Research screen (**⛓ Supply chain**, or press `K`), from **🧰 Tools → Supply chain**, or at
+`/chain.html?symbol=AAPL`. It draws the chain as an interactive flow:
+**suppliers' suppliers → suppliers → the company (plus others that use the same suppliers) → customers → customers' customers**.
+
+- **Verified links:** about 170 curated supplier→customer relationships between listed companies, each with what is
+  supplied and how critical it is (1–3). They come from public filings and widely reported deals (as of 2025) and
+  live in `backend/supply_chain.py`, so you can add more. Line thickness shows criticality.
+- **Industry chain view:** for any stock, the industries that feed its industry and the industries it sells to,
+  filled with real companies from the app's market data.
+- **Live overlay:** today's move and the engine's score on every company, plus the average move of everything
+  upstream vs downstream.
+- **"What if it's disrupted?":** click any supplier to light up everything downstream that its failure would reach,
+  and get an AI analysis of the impact and the alternatives.
+- **✨ AI: find more links:** the local AI suggests extra suppliers and customers. They're drawn dashed and marked
+  *unverified* because a small local model can be wrong.
+- Pan by dragging, zoom with the wheel, click a company for details, double-click to re-centre the chain on it.
+
+There's no free, licensed company-level supply-chain database, so coverage is deepest for large, well-documented
+companies (semiconductors, smartphones, AI/cloud, EVs and batteries, aerospace, autos, energy, pharma, consumer staples,
+Indian autos, airlines and telecoms).
+
 ## What-If Lab 🔮
 
 Type any event ("China invades Taiwan", "Fed cuts 1%", "oil hits $150", "AI boom doubles data-center capex"):

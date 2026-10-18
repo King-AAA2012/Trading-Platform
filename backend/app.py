@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from . import ai, auth, billing, config, data, db, engine, extras, markets, optimizer, planner, portfolio, scenario, store
+from . import ai, auth, billing, config, data, db, engine, extras, markets, optimizer, planner, portfolio, scenario, store, supply_chain
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONT = ROOT / "frontend"
@@ -27,7 +27,7 @@ _scan_cache: dict[str, tuple[float, list, dict]] = {}
 # pages and APIs anyone may reach without an account
 PUBLIC_API = ("/api/auth/", "/api/config", "/api/billing/webhook")
 MEMBER_API = ("/api/me", "/api/billing/")          # need login, but not an active subscription
-APP_PAGES = ("/app", "/index.html", "/research.html", "/report.html", "/account.html")
+APP_PAGES = ("/app", "/index.html", "/research.html", "/report.html", "/account.html", "/chain.html")
 
 
 @app.middleware("http")
@@ -615,6 +615,106 @@ def api_holdings_analytics():
     out["journal"] = st.get("journal", [])[-100:][::-1]
     out["realized"] = sum(j.get("realized") or 0 for j in st.get("journal", []))
     return J(out)
+
+
+# ---------------------------------------------------------------- supply chain
+def _scan_rows_index() -> dict[str, dict]:
+    out = {}
+    for _, rows, _ in list(_scan_cache.values()):
+        for r in rows:
+            out.setdefault(r["symbol"], r)
+    return out
+
+
+def _chain(symbol: str) -> dict:
+    rows = _scan_rows_index()
+    g = supply_chain.build(symbol, rows)
+    syms = list(g["tier"])
+    ind_syms = []
+    for grp in g["industry"]["up"] + g["industry"]["down"]:
+        ind_syms += grp["companies"][:6]
+    ind_syms += g["industry"]["peers"][:8]
+    allq = list(dict.fromkeys(syms + ind_syms))
+    quotes = {}
+    for i in range(0, len(allq), 40):
+        for q in data.quotes(allq[i:i + 40]):
+            quotes[q["symbol"]] = q
+
+    def node(sym):
+        q, r = quotes.get(sym, {}), rows.get(sym, {})
+        info = data._meta.get(sym) if isinstance(data._meta.get(sym), dict) else {}
+        return {"symbol": sym, "name": q.get("name") or r.get("name") or sym, "price": q.get("price") or r.get("price"), "changePct": q.get("changePct"),
+                "currency": q.get("currency") or r.get("currency"), "score": r.get("score"), "signal": r.get("signal"),
+                "sector": r.get("sector") or info.get("sector"), "industry": r.get("industry") or info.get("industry")}
+    nodes = {s_: {**node(s_), "tier": g["tier"][s_], "role": g["role"][s_]} for s_ in syms}
+    if nodes[symbol]["name"] == symbol:
+        try:
+            nodes[symbol]["name"] = data.get_history(symbol, "5d")["meta"]["name"]
+        except Exception:
+            pass
+    nodes[symbol].update({k: v for k, v in data.info_of(symbol).items() if v and not nodes[symbol].get(k)})
+    ind = g["industry"]
+    for grp in ind["up"] + ind["down"]:
+        grp["companies"] = [node(x) for x in grp["companies"]]
+    ind["peers"] = [node(x) for x in ind["peers"]]
+
+    def avg(vals):
+        v = [x for x in vals if x is not None]
+        return round(float(np.mean(v)), 2) if v else None
+    up = [n for n in nodes.values() if n["tier"] < 0]
+    down = [n for n in nodes.values() if n["tier"] > 0]
+    crit = [e for e in g["edges"] if e["to"] == symbol and e["importance"] == 3]
+    stats = {"suppliers": sum(n["role"] == "supplier" for n in nodes.values()), "customers": sum(n["role"] == "customer" for n in nodes.values()),
+             "tier2": sum(n["tier"] in (-2, 2) for n in nodes.values()), "siblings": sum(n["role"] == "sibling" for n in nodes.values()),
+             "critical": [e["from"] for e in crit], "upDay": avg([n["changePct"] for n in up]), "downDay": avg([n["changePct"] for n in down]),
+             "upScore": avg([n["score"] for n in up]), "downScore": avg([n["score"] for n in down])}
+    return {"symbol": symbol, "nodes": nodes, "edges": g["edges"], "shared": g["shared"], "industry": ind, "verified": g["verified"], "stats": stats,
+            "asOf": "Curated from public filings & reporting (2025). Relationships change; verify before relying on them."}
+
+
+@app.get("/api/chain/{symbol:path}")
+def api_chain(symbol: str):
+    return J(_chain(symbol.strip().upper() if "." not in symbol else symbol.strip()))
+
+
+@app.get("/api/chainai/{symbol:path}")
+def api_chain_ai(symbol: str):
+    info = data.info_of(symbol)
+    name = (data.get_history(symbol, "5d") or {}).get("meta", {}).get("name", symbol)
+    out = supply_chain.ai_suggest(symbol, name, info.get("industry", ""))
+    q = {x["symbol"]: x for x in data.quotes([i["symbol"] for i in out.get("suppliers", []) + out.get("customers", [])])} if out.get("suppliers") or out.get("customers") else {}
+    for grp in ("suppliers", "customers"):
+        for it in out.get(grp, []):
+            it.update({"price": q.get(it["symbol"], {}).get("price"), "changePct": q.get(it["symbol"], {}).get("changePct")})
+    return J(out)
+
+
+@app.post("/api/ai/chain")
+def api_ai_chain(body: dict = Body(...)):
+    sym = body["symbol"]
+    g = _chain(sym)
+    n = g["nodes"]
+
+    def line(e):
+        return (f"- {n.get(e['from'], {}).get('name', e['from'])} ({e['from']}) supplies {n.get(e['to'], {}).get('name', e['to'])} ({e['to']}): "
+                f"{e['what']} [importance {e['importance']}/3]")
+    focus = n[sym]
+    ind = g["industry"]
+    links = "\n".join(line(e) for e in g["edges"][:60]) or "(none in our database)"
+    ctx = (f"Company: {focus['name']} ({sym}), industry {ind.get('industry')}.\nVerified supply-chain links:\n{links}\n"
+           f"Upstream industries: {', '.join(x['industry'] for x in ind['up'])}. Downstream industries: {', '.join(x['industry'] for x in ind['down'])}.\n"
+           f"Today: suppliers average {g['stats']['upDay']}%, customers average {g['stats']['downDay']}%.")
+    if body.get("disrupt"):
+        d = body["disrupt"]
+        prompt = (f"{ctx}\n\nScenario: {n.get(d, {}).get('name', d)} ({d}) suffers a major disruption (factory outage, sanctions, bankruptcy or export ban). "
+                  f"In markdown: '## Direct impact on {focus['name']}', '## Knock-on effects through the chain', '## Who could benefit (alternative suppliers / competitors)', "
+                  "'## How hard is it to replace them?' and '## What to watch'. Use the data given plus well-established industry knowledge; say when you are unsure.")
+    else:
+        prompt = (f"{ctx}\n\nExplain this company's supply chain for an investor in markdown: '## How the chain works' (inputs to end customers), "
+                  "'## Critical dependencies & concentration risk', '## Customer concentration', '## Who shares the same suppliers (and competes for capacity)', "
+                  "'## What to watch'. Use the data given; say when you are unsure.")
+    fb = "## Verified links\n" + ("\n".join(line(e) for e in g["edges"][:40]) or "None in our database yet.") + "\n\n*(Start Ollama for an AI explanation.)*"
+    return _text_stream(ai.stream([{"role": "user", "content": prompt}]), fb)
 
 
 # ---------------------------------------------------------------- AI

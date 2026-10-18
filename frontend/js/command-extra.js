@@ -236,7 +236,7 @@ window.CX = (() => {
   $("#alertBtn").onclick = openAlerts;
 
   // ---------------------------------------------------------------- tools
-  const TOOLS = { size: "📐 Position size", compound: "📈 Compound & SIP", goal: "🎯 Goal planner", fx: "💱 Currency converter", compare: "⚖️ Compare", backtest: "🧪 Backtest", backup: "💾 Backup", glossary: "📖 Glossary", keys: "⌨ Shortcuts" };
+  const TOOLS = { chain: "⛓ Supply chain", size: "📐 Position size", compound: "📈 Compound & SIP", goal: "🎯 Goal planner", fx: "💱 Currency converter", compare: "⚖️ Compare", backtest: "🧪 Backtest", backup: "💾 Backup", glossary: "📖 Glossary", keys: "⌨ Shortcuts" };
   function openTools(which = "size") {
     const body = UX.modal("🧰 Tools", `<div class="tabs" id="tTabs" style="margin-bottom:12px;flex-wrap:wrap">${Object.entries(TOOLS).map(([k, v]) => `<button data-tool="${k}" class="${k === which ? "on" : ""}">${v}</button>`).join("")}</div><div id="tBody"></div>`, true);
     body.querySelectorAll("[data-tool]").forEach((b) => (b.onclick = () => openTools(b.dataset.tool)));
@@ -244,6 +244,17 @@ window.CX = (() => {
     const prof = C.state.profile;
     const f = (id, label, val, step = "any") => `<div class="field"><label>${label}</label><input class="in num" id="${id}" type="number" step="${step}" value="${val}"></div>`;
     if (which === "glossary") return UX.showGlossary();
+    if (which === "chain") {
+      const cur = document.querySelector("#rows tr.row.sel")?.dataset.s || C.state.watchlist?.[0] || "AAPL";
+      tb.innerHTML = `<div class="hint" style="margin-bottom:10px">See any company's full supply chain: its suppliers, their suppliers, its customers and their customers, plus who else depends on the same suppliers. Live prices are shown on every company.</div>
+        <div style="display:flex;gap:8px;align-items:end"><div class="field" style="flex:1"><label>Company</label><div class="search" style="width:100%"><span class="ico">⌕</span><input id="chS" class="in" autocomplete="off" value="${esc(cur)}"><div id="chR" class="results"></div></div></div><button class="btn primary" id="chGo" style="height:34px">⛓ Open supply chain</button></div>
+        <div class="chips" style="margin-top:12px">${["AAPL", "NVDA", "TSM", "TSLA", "BA", "AIR.PA", "WMT", "MARUTI.NS", "INDIGO.NS", "LLY"].map((s) => `<span class="chip" data-ch="${s}">${s}</span>`).join("")}</div>`;
+      let pick = cur;
+      TS.bindSearch(tb.querySelector("#chS"), tb.querySelector("#chR"), (s) => { pick = s; window.open(`/chain.html?symbol=${encodeURIComponent(s)}`, "_blank"); }, { keepValue: true, global: false });
+      tb.querySelector("#chGo").onclick = () => window.open(`/chain.html?symbol=${encodeURIComponent(pick || tb.querySelector("#chS").value.trim().toUpperCase())}`, "_blank");
+      tb.querySelectorAll("[data-ch]").forEach((c) => (c.onclick = () => window.open(`/chain.html?symbol=${c.dataset.ch}`, "_blank")));
+      return;
+    }
     if (which === "keys") return UX.showShortcuts();
     if (which === "size") {
       tb.innerHTML = `<div class="form" style="grid-template-columns:repeat(4,1fr)">${f("sE", "Entry price", 100)}${f("sS", "Stop-loss", 95)}${f("sT", "Target (optional)", 110)}${f("sB", `Account (${prof.currency})`, prof.budget || 10000)}${f("sR", "Risk per trade %", prof.riskPerTrade || 1, 0.1)}${f("sF", "Fees per trade", 0)}</div><div class="card" id="sOut" style="margin-top:10px"></div>`;
@@ -440,6 +451,7 @@ window.CX = (() => {
   UX.shortcut("n", "Alerts", () => openAlerts());
   UX.shortcut("g", "Glossary", () => UX.showGlossary());
   UX.shortcut("d", "Toggle compact density", () => UX.toggleDensity());
+  UX.shortcut("k", "Supply chain of the selected stock", () => window.open(`/chain.html?symbol=${encodeURIComponent(document.querySelector("#rows tr.row.sel")?.dataset.s || "AAPL")}`, "_blank"));
 
   // ---------------------------------------------------------------- boot (after command.js has loaded state)
   const boot = setInterval(() => {
