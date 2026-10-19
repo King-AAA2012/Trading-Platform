@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from . import ai, auth, billing, config, data, db, desk, engine, extras, intl, markets, optimizer, planner, portfolio, scenario, store, supply_chain
+from . import ai, alerts, auth, billing, config, data, db, desk, engine, extras, intl, markets, optimizer, planner, portfolio, scenario, store, supply_chain
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONT = ROOT / "frontend"
@@ -30,7 +30,7 @@ _scan_cache: dict[str, tuple[float, list, dict]] = {}
 
 
 # pages and APIs anyone may reach without an account
-PUBLIC_API = ("/api/auth/", "/api/config", "/api/billing/webhook")
+PUBLIC_API = ("/api/auth/", "/api/config", "/api/billing/webhook", "/api/alerts/unsubscribe")
 MEMBER_API = ("/api/me", "/api/billing/")          # need login, but not an active subscription
 APP_PAGES = ("/app", "/index.html", "/research.html", "/report.html", "/account.html", "/chain.html", "/desk.html")
 
@@ -724,10 +724,7 @@ def api_ai_chain(body: dict = Body(...)):
 
 # ---------------------------------------------------------------- daily desk (scheduled jobs + inbox)
 def _my_symbols(st: dict) -> list[str]:
-    s = {h["symbol"] for h in st.get("holdings", []) if h.get("symbol")} | set(st.get("watchlist") or [])
-    for lst in (st.get("watchlists") or {}).values():
-        s |= set(lst)
-    return sorted(s)
+    return desk.tracked_symbols(st)
 
 
 @app.get("/api/desk")
@@ -795,6 +792,72 @@ def api_desk_settings(body: dict = Body(...)):
         st["profile"]["deskMute"] = [j for j in (body.get("mute") or []) if j in desk.SCHEDULE]
     store.save(st)
     return J({"ok": True})
+
+
+@app.get("/api/desk/portfolio")
+def api_desk_portfolio():
+    return J(alerts.portfolio(store.load()))
+
+
+@app.post("/api/desk/portfolio")
+def api_desk_portfolio_edit(body: dict = Body(...)):
+    """{add: sym} | {remove: sym} | {restore: sym} | {holdings: bool} | {watchlists: bool}"""
+    st = store.load()
+    try:
+        new = alerts.portfolio_edit(st, body)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    store.save(st)
+    if new:
+        alerts.quiet_load(new)
+    return J(alerts.portfolio(st))
+
+
+@app.get("/api/alerts")
+def api_alerts():
+    return J(alerts.public(store.load(), store.current_uid.get()))
+
+
+@app.post("/api/alerts")
+def api_alerts_save(body: dict = Body(...)):
+    st = store.load()
+    try:
+        res = alerts.save_settings(st, store.current_uid.get(), body)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(400, str(e))
+    store.save(st)
+    return J({**res, "alerts": alerts.public(st, store.current_uid.get())})
+
+
+@app.post("/api/alerts/verify")
+def api_alerts_verify(body: dict = Body(...)):
+    st = store.load()
+    try:
+        ok = alerts.verify(st, store.current_uid.get(), str(body.get("code", "")))
+    except ValueError as e:
+        store.save(st)
+        raise HTTPException(400, str(e))
+    store.save(st)
+    if not ok:
+        raise HTTPException(400, "That code isn't right. Check the latest email we sent.")
+    return J({"ok": True, "alerts": alerts.public(st, store.current_uid.get())})
+
+
+@app.post("/api/desk/refresh")
+def api_desk_refresh():
+    """Update now: refresh my companies, deliver anything new, email me a digest."""
+    res = alerts.start(store.current_uid.get(), force=True)
+    return J({**res, "alerts": alerts.public(store.load(), store.current_uid.get())})
+
+
+@app.get("/api/alerts/unsubscribe", response_class=HTMLResponse)
+def api_alerts_unsubscribe(u: str = "", t: str = ""):
+    ok = alerts.unsubscribe(u, t)
+    msg = "You won't get Daily Desk emails any more. You can switch them back on from the Daily Desk page." if ok else \
+        "This unsubscribe link isn't valid any more. Log in and switch emails off on the Daily Desk page."
+    return HTMLResponse(f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>{config.APP_NAME}</title>"
+                        f"<body style='font-family:Segoe UI,Arial,sans-serif;max-width:520px;margin:60px auto;padding:0 16px;color:#1d2330'>"
+                        f"<h2>{'Unsubscribed' if ok else 'Link expired'}</h2><p>{msg}</p><p><a href='/desk.html'>Open the Daily Desk</a></p></body>")
 
 
 @app.post("/api/desk/run")

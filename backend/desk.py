@@ -19,6 +19,7 @@ inbox messages are per user (inside each user's private state).
 """
 from __future__ import annotations
 
+import copy
 import csv
 import datetime as dt
 import hashlib
@@ -49,6 +50,7 @@ SCHEDULE = {"roll": [(9, 1)], "groll": [(9, 1)], "calendar": [(9, 1), (20, 1)]}
 LABEL = {"roll": "NSE futures roll cost", "groll": "Global futures roll cost", "calendar": "Results, concalls & dividends"}
 _lock = threading.RLock()
 _running: set[str] = set()
+_inflight: set[str] = set()                         # companies being refreshed right now (by the scheduled run or a user's update)
 _nse = requests.Session()
 _nse.headers.update({"User-Agent": data.UA, "Referer": "https://www.nseindia.com/", "Accept": "application/json, text/plain, */*", "Accept-Language": "en-US,en;q=0.9"})
 _last_call = [0.0]
@@ -450,6 +452,7 @@ def _india(sym: str, corp: dict, since: float, boot: bool, budget: _Budget) -> l
         return []
     c = corp.setdefault(sym, {"results": [], "concalls": [], "transcripts": [], "dividends": [], "events": [], "seen": []})
     boot = boot or not c.get("updated")              # a newly tracked company: load its history quietly, no messages
+    since = c.get("updated") or since                # pick up from this company's own last refresh
     seen = set(c["seen"])
     now = now_ist()
     frm = (now - dt.timedelta(days=120)) if boot else dt.datetime.fromtimestamp(since, IST) - dt.timedelta(days=1)
@@ -602,6 +605,7 @@ def _global(sym: str, corp: dict, since: float, boot: bool, budget: _Budget) -> 
         return []
     c = corp.setdefault(sym, _new_co())
     boot = boot or not c.get("updated")              # a newly tracked company: load its history quietly, no messages
+    since = c.get("updated") or since                # pick up from this company's own last refresh
     seen = set(c["seen"])
     j = data._yget(f"/v10/finance/quoteSummary/{requests.utils.quote(sym, safe='')}", {"modules": "price,calendarEvents,earningsHistory,earnings"}, crumb=True)
     res = ((j or {}).get("quoteSummary", {}).get("result") or [None])[0] or {}
@@ -924,18 +928,37 @@ def run_calendar() -> dict:
     started = time.time()
     users = _tracked_by_user()
     syms = sorted({s for v in users.values() for s in v})[:400]
-    corp = _load(CORP, {})
-    budget = _Budget(40)
-    items, errors = [], []
-    for s in syms:
-        try:
-            items += _india(s, corp, since, boot, budget) if _nse_symbol(s) else _global(s, corp, since, boot, budget)
-        except Exception as e:  # one bad company must not stop the run
-            errors.append(f"{s}: {e}")
-    _save(CORP, corp)
+    items, errors, _n = refresh_companies(syms, since, boot, _Budget(40))
     fresh = [i for i in items if i.get("fresh")]
     _deliver_calendar(fresh, users, boot, len(syms))
     return {"companies": len(syms), "new": len(fresh), "bootstrap": boot, "errors": errors[:10], "windowEnd": started}
+
+
+def refresh_companies(syms: list[str], since: float | None = None, boot: bool = False, budget: _Budget | None = None,
+                      max_age: float = 0) -> tuple[list[dict], list[str], int]:
+    """Refresh companies' filings and merge them into the shared company store. Skips companies refreshed within
+    `max_age` seconds and ones another run is refreshing right now (that run delivers to everyone who tracks them)."""
+    since = since or time.time() - 3 * 86400
+    budget = budget or _Budget(10)
+    with _lock:
+        corp = _load(CORP, {})
+        todo = [s for s in dict.fromkeys(syms) if s not in _inflight and time.time() - (corp.get(s) or {}).get("updated", 0) >= max_age]
+        _inflight.update(todo)
+        local = {s: copy.deepcopy(corp[s]) for s in todo if s in corp}
+    items, errors = [], []
+    try:
+        for s in todo:
+            try:
+                items += _india(s, local, since, boot, budget) if _nse_symbol(s) else _global(s, local, since, boot, budget)
+            except Exception as e:                   # one bad company must not stop the run
+                errors.append(f"{s}: {e}")
+    finally:
+        with _lock:
+            corp = _load(CORP, {})
+            corp.update({s: local[s] for s in todo if s in local})
+            _save(CORP, corp)
+            _inflight.difference_update(todo)
+    return items, errors, len(todo)
 
 
 KIND_ORDER = ["result", "concall", "transcript", "recording", "dividend", "calendar"]
@@ -965,7 +988,8 @@ def _deliver_calendar(items: list[dict], users: dict, boot: bool, n: int):
                     body.append(i["body"])
                 body.append("")
         counts = ", ".join(f"{sum(1 for i in mine if i['kind'] == k)} {k}{'s' if sum(1 for i in mine if i['kind'] == k) > 1 else ''}" for k in KIND_ORDER if any(i["kind"] == k for i in mine))
-        _push(uid, "calendar", f"What's new · {counts}", "\n".join(body), [{"kind": i["kind"], "symbol": i["symbol"], "title": i["title"]} for i in mine])
+        _push(uid, "calendar", f"What's new · {counts}", "\n".join(body),
+              [{"kind": i["kind"], "symbol": i["symbol"], "title": i["title"], "body": (i.get("body") or "")[:1500], "link": i.get("link"), "ai": bool(i.get("ai"))} for i in mine])
 
 
 # ---------------------------------------------------------------- users, inbox, email
@@ -986,17 +1010,31 @@ def _with_state(uid, fn):
         store.current_uid.reset(tok)
 
 
+def read_state(uid) -> dict:
+    tok = store.current_uid.set(uid)
+    try:
+        return store.load()
+    finally:
+        store.current_uid.reset(tok)
+
+
+def tracked_symbols(st: dict) -> list[str]:
+    """What the Daily Desk follows for a user: holdings and watchlists (each can be switched off on the Portfolio tab),
+    plus symbols added there, minus the ones removed there."""
+    d = st.get("desk") or {}
+    s = set()
+    if d.get("holdings", True):
+        s |= {h["symbol"] for h in st.get("holdings", []) if h.get("symbol")}
+    if d.get("watchlists", True):
+        s |= set(st.get("watchlist") or [])
+        for lst in (st.get("watchlists") or {}).values():
+            s |= set(lst)
+    s |= set(d.get("added") or [])
+    return sorted(s - set(d.get("removed") or []))
+
+
 def _tracked_by_user() -> dict:
-    out = {}
-    for uid in _users():
-        def grab(st):
-            s = {h["symbol"] for h in st.get("holdings", []) if h.get("symbol")}
-            s |= set(st.get("watchlist") or [])
-            for lst in (st.get("watchlists") or {}).values():
-                s |= set(lst)
-            return s
-        out[uid] = _with_state(uid, grab)
-    return out
+    return {uid: set(tracked_symbols(read_state(uid))) for uid in _users()}
 
 
 def _push(uid, job: str, title: str, body: str, items: list):
@@ -1007,18 +1045,61 @@ def _push(uid, job: str, title: str, body: str, items: list):
         if job in (prof.get("deskMute") or []):      # the user switched this job's messages off
             return None
         st["inbox"] = ([msg] + (st.get("inbox") or []))[:300]
-        return prof
-    prof = _with_state(uid, add)
-    if prof and prof.get("notifyEmail"):
-        to = config.E("NOTIFY_EMAIL", "") if uid is None else (db.q("SELECT email FROM users WHERE id=?", (uid,), one=True) or {}).get("email")
-        if to:
-            send_email(to, f"{config.APP_NAME}: {title}", body)
+        return st
+    st = _with_state(uid, add)
+    if st:
+        from . import alerts                         # "email me as soon as something new comes in"
+        alerts.on_message(uid, st, msg)
 
 
-def send_email(to: str, subject: str, md: str) -> bool:
+def email_ready() -> bool:
+    return bool(config.E("RESEND_API_KEY", "") or config.E("SMTP_HOST", ""))
+
+
+def md_html(md: str) -> str:
+    """Small markdown -> email-safe HTML: ### headings, **bold**, *italic*, [links](url), - bullets and | tables |."""
     import html as _h
-    html = "<div style='font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.5'>" + _h.escape(md).replace("\n", "<br>") + \
-           f"<hr><small>{config.APP_NAME} · research only, not financial advice. Manage email alerts on the Daily Desk page.</small></div>"
+
+    def inline(t):
+        t = _h.escape(t)
+        t = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2" style="color:#2f6fed">\1</a>', t)
+        t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
+        return re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<i>\1</i>", t)
+    out, lines, i = [], (md or "").split("\n"), 0
+    while i < len(lines):
+        ln = lines[i]
+        if ln.startswith("|"):
+            rows = []
+            while i < len(lines) and lines[i].startswith("|"):
+                if not re.match(r"^\|[\s|:-]+\|$", lines[i]):
+                    rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")])
+                i += 1
+            td = "padding:4px 9px;border-bottom:1px solid #e3e6ec;font-size:13px;text-align:{a}"
+            out.append("<table style='border-collapse:collapse;margin:6px 0 12px'>" + "".join(
+                "<tr>" + "".join(f"<{'th' if r == 0 else 'td'} style='{td.format(a='left' if k == 0 else 'right')}'>{inline(c)}</{'th' if r == 0 else 'td'}>"
+                                 for k, c in enumerate(row)) + "</tr>" for r, row in enumerate(rows)) + "</table>")
+            continue
+        m = re.match(r"^(#{1,4})\s+(.*)", ln)
+        if m:
+            out.append(f"<h{min(len(m.group(1)) + 1, 4)} style='margin:16px 0 6px;font-size:{17 - len(m.group(1))}px'>{inline(m.group(2))}</h{min(len(m.group(1)) + 1, 4)}>")
+        elif re.match(r"^\s*[-*•]\s+", ln):
+            items = []
+            while i < len(lines) and re.match(r"^\s*[-*•]\s+", lines[i]):
+                item = re.sub(r"^\s*[-*•]\s+", "", lines[i])
+                items.append(f"<li>{inline(item)}</li>")
+                i += 1
+            out.append("<ul style='margin:4px 0 8px;padding-left:20px'>" + "".join(items) + "</ul>")
+            continue
+        elif ln.strip():
+            out.append(f"<p style='margin:4px 0'>{inline(ln)}</p>")
+        i += 1
+    return "".join(out)
+
+
+def send_email(to: str, subject: str, md: str, footer: str = "") -> bool:
+    html = ("<div style='font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.5;color:#1d2330;max-width:860px'>" + md_html(md) +
+            f"<hr style='border:0;border-top:1px solid #e3e6ec;margin:18px 0 8px'><small style='color:#6b7385'>{config.APP_NAME} · research only, "
+            f"not financial advice. Change what you get on the Daily Desk page.{footer}</small></div>")
     key = config.E("RESEND_API_KEY", "")
     sender = config.E("SMTP_FROM", "") or config.E("EMAIL_FROM", "") or config.COMPANY_EMAIL
     try:
@@ -1100,6 +1181,11 @@ def run_job(job: str, background: bool = True):
 
 def _loop():
     time.sleep(20)                                   # let the server finish starting
+    try:
+        from . import alerts
+        alerts.rebuild_index()
+    except Exception as e:
+        print("desk alerts index:", e)
     while True:
         try:
             now = now_ist()
@@ -1108,6 +1194,8 @@ def _loop():
                 last = (jobs.get(job) or {}).get("last") or 0
                 if last < _last_slot(job, now).timestamp() and job not in _running:
                     run_job(job)
+            from . import alerts
+            alerts.tick()                            # users' own intervals (hourly, daily...) and their email digests
         except Exception as e:
             print("desk scheduler:", e)
         time.sleep(30)

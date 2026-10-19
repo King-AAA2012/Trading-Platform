@@ -280,8 +280,25 @@ off or asleep at a scheduled time, the missed job runs as soon as you start Casu
 - **Not included:** Eurex and ICE Europe futures (no free settlement prices).
 - **New symbols:** a company you start tracking loads its history quietly; you only hear about what's filed after that.
 - **Mute:** each job has an **Inbox messages** switch on the Daily Desk page.
-- **Inbox:** messages land in the **📬 Inbox** (Command screen header → Daily Desk). You can also get them by email
-  (Resend or SMTP in `.env`), and switch email on or off on the Daily Desk page.
+- **Inbox:** messages land in the **📬 Inbox** (Command screen header → Daily Desk).
+- **📁 Portfolio tab:** the companies the desk follows for you. That's your holdings and watchlists (each can be
+  switched off) plus anything you add with the search box, from any market. **✕** stops the desk following a company
+  (your holdings and watchlists don't change) and **↺** brings it back. A company you add loads its history in a few
+  seconds, quietly.
+- **🔄 Update now:** refreshes every company on your Portfolio tab straight away. It also fetches the latest futures
+  settlements if the morning data is over 3 hours old, puts anything new in your inbox and emails you a digest.
+- **📧 Email alerts:** choose how often your companies update: as soon as something is filed (checked hourly),
+  every hour, every 3 or 6 hours, twice a day, daily or weekly, at a time you pick. Then choose what the email contains:
+  results, call dates and dial-ins, transcripts, dividends, new dates, the next 14 days, NSE and global roll cost, and a
+  price snapshot. You can skip emails when nothing new was filed (Update now always sends one). This runs on top of the
+  standard 09:01 / 20:01 IST runs. Whoever triggers an update, anything new reaches everyone tracking that company.
+- **Email safety:** on the website an address must be confirmed with a 6-digit code before anything is sent to it, and
+  every email has a one-click unsubscribe link. Private mode skips the code.
+- **Setting up email sending** (needed for any email): either a free [Resend](https://resend.com) key
+  (`RESEND_API_KEY`, `EMAIL_FROM`), or SMTP. For Gmail: turn on 2-Step Verification, create an App password
+  (Google Account → Security → App passwords), then set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`,
+  `SMTP_USER=you@gmail.com`, `SMTP_PASSWORD=<the 16-letter app password>`, `SMTP_FROM=you@gmail.com` in `.env`,
+  and restart.
 - **Run now:** the Daily Desk page shows every tracker (roll cost, results, concalls and transcripts, dividends, upcoming
   dates), with **▶ Run now** buttons in private mode or for `COMP_EMAILS` admins.
 

@@ -33,6 +33,12 @@
   .filters2 { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
   .ev { display: grid; grid-template-columns: 110px 90px 1fr; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; align-items: center; }
   .job .check { font-size: 12px; margin-top: 6px; }
+  .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; margin: 4px 0 8px; }
+  .kinds label { font-size: 12.5px; }
+  .tag { font-size: 10.5px; border-radius: 5px; padding: 0 6px; margin-right: 3px; background: var(--panel2); border: 1px solid var(--line2); color: var(--muted); white-space: nowrap; }
+  .tag.h { color: var(--up); border-color: var(--up); } .tag.a { color: var(--accent); border-color: var(--accent); }
+  .xbtn { background: none; border: 1px solid var(--line2); color: var(--muted); border-radius: 6px; cursor: pointer; padding: 1px 7px; }
+  .xbtn:hover { color: var(--down); border-color: var(--down); }
   .src { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line2); border-radius: 5px; padding: 0 5px; margin-left: 4px; }
   @media (max-width: 1250px) { .jobs { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 900px) { .jobs { grid-template-columns: 1fr; } }
@@ -47,7 +53,7 @@
 <div class="wrap">
   <div class="jobs" id="jobs"><div class="empty"><span class="spin"></span></div></div>
   <div class="tabsbar" id="tabs">
-    <button data-t="inbox" class="on">📬 Inbox <span class="n" id="nUnread" style="display:none"></span></button>
+    <button data-t="inbox" class="on">📬 Inbox <span class="n" id="nUnread" style="display:none"></span></button><button data-t="portfolio">📁 Portfolio</button>
     <button data-t="roll">⛽ Futures roll cost</button><button data-t="results">📊 Results</button><button data-t="concalls">📞 Concalls & transcripts</button>
     <button data-t="divs">💰 Dividends</button><button data-t="upcoming">📅 Upcoming</button>
   </div>
@@ -60,7 +66,7 @@
   const $ = (s) => document.querySelector(s);
   const { api, esc, price, pct, cls } = TS;
   let D = null, box = [], tab = location.hash.slice(1) || "inbox", rollF = "tracked", rollQ = "", rollSort = ["symbol", 1];
-  let rollM = null, gF = "tracked", gK = "all", gR = "all", gSort = null;
+  let rollM = null, gF = "tracked", gK = "all", gR = "all", gSort = null, A = null, P = null;
   const ICON = { roll: "⛽", groll: "🌍", calendar: "📊" };
   const CUR = { USD: "$", JPY: "¥", HKD: "HK$", SGD: "S$", INR: "₹" };
   const fx = (v, d) => v == null ? "–" : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -85,8 +91,9 @@
   }
 
   async function load() {
-    [D, box] = await Promise.all([api("/api/desk"), api("/api/inbox")]);
+    [D, box, A] = await Promise.all([api("/api/desk"), api("/api/inbox"), api("/api/alerts")]);
     renderJobs(); setTab(tab);
+    if (A.job && A.job.running) pollUpdate();
   }
   function renderJobs() {
     const card = (k) => {
@@ -100,26 +107,149 @@
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${D.canRun ? `<button class="btn sm" data-run="${k}" style="margin-top:6px" ${j.running ? "disabled" : ""}>▶ Run now</button>` : ""}
         <label class="check" data-tip="Switch this job's inbox messages (and emails) on or off. The tables on this page keep updating either way."><input type="checkbox" data-mute="${k}" ${D.mute.includes(k) ? "" : "checked"}> Inbox messages</label></div></div>`;
     };
-    $("#jobs").innerHTML = card("roll") + card("groll") + card("calendar") + `<div class="job"><h4>✉️ Email me updates</h4>
-      <label class="check"><input type="checkbox" id="em" ${D.notifyEmail ? "checked" : ""} ${D.emailReady ? "" : "disabled"}> Send each new message by email too</label>
-      <div class="meta" style="margin-top:4px">${D.emailReady ? "Messages always appear in the inbox here." : "Email isn't set up on this server yet (add SMTP or Resend details to .env). Messages appear in the inbox."}</div>
-      <div class="meta" style="margin-top:4px">Tracking <b>${D.tracked.length}</b> symbols from your holdings & watchlists.</div></div>`;
+    $("#jobs").innerHTML = card("roll") + card("groll") + card("calendar") + updatesCard();
+    $("#updNow").onclick = updateNow;
+    $("#alertsBtn").onclick = openAlerts;
     document.querySelectorAll("[data-run]").forEach((b) => (b.onclick = async () => { b.disabled = true; b.innerHTML = '<span class="spin"></span> Running'; await api("/api/desk/run", { body: { job: b.dataset.run } }).catch((e) => TS.toast(e.message)); poll(); }));
     document.querySelectorAll("[data-mute]").forEach((c) => (c.onchange = () => {
       D.mute = [...document.querySelectorAll("[data-mute]")].filter((x) => !x.checked).map((x) => x.dataset.mute);
       api("/api/desk/settings", { body: { mute: D.mute } }).then(() => TS.toast(c.checked ? "Messages on" : "Messages off — tables still update"));
     }));
-    const em = $("#em"); if (em) em.onchange = () => api("/api/desk/settings", { body: { notifyEmail: em.checked } }).then(() => TS.toast(em.checked ? "Email updates on" : "Email updates off"));
     const n = box.filter((m) => !m.read).length;
     $("#nUnread").style.display = n ? "" : "none"; $("#nUnread").textContent = n;
   }
+  // ---- your updates: interval, email, Update now
+  const at = (a) => ["daily", "weekly", "12h"].includes(a.interval) ? ` at ${String(a.hour).padStart(2, "0")}:00${a.interval === "12h" ? ` & ${String((a.hour + 12) % 24).padStart(2, "0")}:00` : ""}${a.interval === "weekly" ? " on " + DAYS[a.weekday] + "s" : ""}` : "";
+  const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  function updStatus() {
+    const j = A.job || {}, r = j.result || {};
+    if (j.running) return `<span class="spin"></span> Updating your ${A.tracked} companies…`;
+    if (j.error) return `<span class="down">Last update failed: ${esc(j.error)}</span>`;
+    if (j.finished) return `Last update ${fmtT(j.finished)} · <b>${r.new || 0}</b> new${r.emailed ? ` · email ${esc(r.emailed)}` : ""}`;
+    return "";
+  }
+  function updatesCard() {
+    const email = !A.emailOn ? "off" : A.verified ? `to <b>${esc(A.email)}</b>` : `<span class="warn">confirm the code sent to ${esc(A.email)}</span>`;
+    return `<div class="job"><h4>🔄 Your updates</h4>
+      <div class="meta">Tracking <b>${A.tracked}</b> companies (Portfolio tab) · auto-update <b>${A.configured ? esc(A.intervals[A.interval].toLowerCase()) + at(A) : "with the standard runs"}</b>${A.next ? ` · next ${fmtT(A.next)}` : ""}</div>
+      <div class="meta">Email: ${email}${A.lastSent ? ` · last sent ${fmtT(A.lastSent)}` : ""}</div>
+      <div class="meta" id="updStatus">${updStatus()}</div>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><button class="btn sm primary" id="updNow" ${A.job && A.job.running ? "disabled" : ""} data-tip="Refresh every company on your Portfolio tab now, update the inbox and email you a digest (if email is on)">🔄 Update now</button>
+        <button class="btn sm" id="alertsBtn" data-tip="Choose how often your companies update and what gets emailed to you">📧 Email alerts…</button></div></div>`;
+  }
+  async function updateNow() {
+    const r = await api("/api/desk/refresh", { body: {} }).catch((e) => ({ started: false, reason: e.message }));
+    A = r.alerts || A;
+    if (!r.started) { TS.toast(r.reason || "Couldn't start the update"); return; }
+    renderJobs(); pollUpdate();
+  }
+  let updT;
+  function pollUpdate() {
+    clearTimeout(updT);
+    updT = setTimeout(async () => {
+      A = await api("/api/alerts");
+      if (A.job && A.job.running) { const el = $("#updStatus"); if (el) el.innerHTML = updStatus(); pollUpdate(); return; }
+      [D, box] = await Promise.all([api("/api/desk"), api("/api/inbox")]);
+      renderJobs(); setTab(tab);
+      const r = A.job.result || {};
+      TS.toast(A.job.error ? "Update failed" : `Updated ${r.companies} companies · ${r.new || 0} new${r.emailed ? " · email " + r.emailed : ""}`, 4000);
+    }, 2500);
+  }
+  async function openAlerts() {
+    A = await api("/api/alerts");
+    const opt = (v, l, on) => `<option value="${v}" ${on ? "selected" : ""}>${esc(l)}</option>`;
+    const body = UX.modal("📧 Email alerts & update interval", `
+      <div class="field"><label>Update my companies</label><div style="display:flex;gap:6px;flex-wrap:wrap">
+        <select class="in" id="aIv" style="width:auto">${Object.entries(A.intervals).map(([k, l]) => opt(k, l, k === A.interval)).join("")}</select>
+        <select class="in" id="aDay" style="width:auto">${DAYS.map((d, i) => opt(i, d + "s", i === A.weekday)).join("")}</select>
+        <span id="aAtL" class="dim" style="align-self:center">at</span><select class="in" id="aHour" style="width:auto">${Array.from({ length: 24 }, (_, h) => opt(h, String(h).padStart(2, "0") + ":00", h === A.hour)).join("")}</select>
+        <span class="dim" style="align-self:center">your time</span></div>
+        <div class="dim" style="font-size:12px;margin-top:4px">Each update refreshes the filings of every company on your Portfolio tab and puts anything new in your inbox. The standard 09:01 & 20:01 IST runs still happen.</div></div>
+      <div style="border-top:1px solid var(--line);margin:12px 0 10px"></div>
+      <label class="check"><input type="checkbox" id="aOn" ${A.emailOn ? "checked" : ""}> <b>Email me my updates</b></label>
+      <div class="field" style="margin-top:8px"><label>Email address</label><input class="in" id="aEm" type="email" autocomplete="email" placeholder="you@example.com" value="${esc(A.email || A.accountEmail || "")}">
+        ${A.email && A.verified ? '<div class="up" style="font-size:12px;margin-top:3px">✓ Confirmed</div>' : ""}</div>
+      <div id="aCode" style="display:${A.pendingCode && !A.verified ? "block" : "none"};margin-bottom:8px"><div class="dim" id="aCodeMsg" style="font-size:12.5px;margin-bottom:4px">We emailed a 6-digit code to this address. Enter it to start getting emails.</div>
+        <div style="display:flex;gap:6px"><input class="in" id="aCd" inputmode="numeric" maxlength="6" placeholder="123456" style="width:120px"><button class="btn sm primary" id="aVer">Confirm</button><button class="btn sm ghost" id="aRe">Send a new code</button></div></div>
+      <div class="field"><label>Include</label><div class="kinds">${Object.entries(A.kindLabels).map(([k, l]) => `<label class="check"><input type="checkbox" data-k="${k}" ${A.kinds.includes(k) ? "checked" : ""}> ${esc(l)}</label>`).join("")}</div></div>
+      <label class="check"><input type="checkbox" id="aSkip" ${A.skipEmpty ? "checked" : ""}> Skip the email when nothing new was filed (🔄 Update now always emails)</label>
+      ${A.emailReady ? "" : `<div class="warn" style="font-size:12.5px;margin-top:8px">Email sending isn't set up on this server yet${A.private ? " (add Gmail SMTP or Resend details to .env, see the README)" : ""}. Your settings are saved and your inbox still updates.</div>`}
+      <div style="display:flex;gap:8px;margin-top:14px;align-items:center"><button class="btn primary" id="aSave">Save</button><button class="btn" id="aSaveNow">Save & send one now</button><span class="dim" id="aMsg" style="font-size:12.5px"></span></div>`);
+    const sync = () => { const iv = body.querySelector("#aIv").value, timed = ["daily", "weekly", "12h"].includes(iv);
+      body.querySelector("#aDay").style.display = iv === "weekly" ? "" : "none"; ["#aHour", "#aAtL"].forEach((x) => (body.querySelector(x).style.display = timed ? "" : "none")); };
+    body.querySelector("#aIv").onchange = sync; sync();
+    const showCode = (msg) => { body.querySelector("#aCode").style.display = "block"; if (msg) body.querySelector("#aCodeMsg").textContent = msg; body.querySelector("#aCd").focus(); };
+    const save = async (extra = {}) => {
+      const payload = { interval: body.querySelector("#aIv").value, hour: +body.querySelector("#aHour").value, weekday: +body.querySelector("#aDay").value,
+        tz: -new Date().getTimezoneOffset(), email: body.querySelector("#aEm").value.trim(), emailOn: body.querySelector("#aOn").checked,
+        kinds: [...body.querySelectorAll("[data-k]")].filter((c) => c.checked).map((c) => c.dataset.k), skipEmpty: body.querySelector("#aSkip").checked, ...extra };
+      const r = await api("/api/alerts", { body: payload }).catch((e) => { body.querySelector("#aMsg").innerHTML = `<span class="down">${esc(e.message)}</span>`; return null; });
+      if (!r) return null;
+      A = r.alerts; renderJobs();
+      body.querySelector("#aMsg").innerHTML = r.warning ? `<span class="warn">${esc(r.warning)}</span>` : "Saved ✓";
+      if (r.needsCode && !A.verified) showCode(r.sent ? `We emailed a 6-digit code to ${payload.email}. Enter it to start getting emails.` : null);
+      return r;
+    };
+    body.querySelector("#aSave").onclick = async () => { const r = await save(); if (r && (A.verified || !A.emailOn) && !r.warning) { document.getElementById("ux-modal").classList.remove("show"); TS.toast("Saved · next update " + (A.next ? fmtT(A.next) : "soon")); } };
+    body.querySelector("#aSaveNow").onclick = async () => { const r = await save(); if (!r) return; if (A.emailOn && !A.verified) return; document.getElementById("ux-modal").classList.remove("show"); updateNow(); };
+    body.querySelector("#aRe").onclick = () => save({ resend: true });
+    body.querySelector("#aVer").onclick = async () => {
+      const r = await api("/api/alerts/verify", { body: { code: body.querySelector("#aCd").value } }).catch((e) => { body.querySelector("#aCodeMsg").innerHTML = `<span class="down">${esc(e.message)}</span>`; return null; });
+      if (!r) return;
+      A = r.alerts; renderJobs(); body.querySelector("#aCode").style.display = "none"; body.querySelector("#aMsg").innerHTML = '<span class="up">✓ Email confirmed. Your updates will arrive at this address.</span>';
+    };
+  }
+
+  // ---- portfolio: which companies the desk follows
+  async function portfolio() {
+    $("#body").innerHTML = `<div class="hint" style="margin-bottom:10px">These are the companies the Daily Desk follows for you: results, concalls, transcripts, dividends, upcoming dates and the futures linked to them.
+        Add any stock from any market below. Removing a holding here only stops the desk tracking it; your holding stays as it is.</div>
+      <div class="filters2"><div class="search" style="width:360px"><span class="ico">⌕</span><input id="pAdd" class="in" placeholder="Add a company: name or ticker (Apple, RELIANCE, 0700.HK…)" autocomplete="off"><div id="pRes" class="results"></div></div>
+        <label class="check"><input type="checkbox" id="pH"> Include my holdings <span class="dim" id="pHn"></span></label>
+        <label class="check"><input type="checkbox" id="pW"> Include my watchlists <span class="dim" id="pWn"></span></label>
+        <span class="spacer"></span><button class="btn sm primary" id="pUpd">🔄 Update now</button></div>
+      <div id="pBody"><div class="empty"><span class="spin"></span></div></div>`;
+    TS.bindSearch($("#pAdd"), $("#pRes"), (sym) => editP({ add: sym }, `Added ${sym} · loading its filings…`), { global: false });
+    $("#pH").onchange = (e) => editP({ holdings: e.target.checked }, e.target.checked ? "Holdings included" : "Holdings left out");
+    $("#pW").onchange = (e) => editP({ watchlists: e.target.checked }, e.target.checked ? "Watchlists included" : "Watchlists left out");
+    $("#pUpd").onclick = updateNow;
+    P = await api("/api/desk/portfolio");
+    renderP();
+  }
+  function renderP() {
+    if (tab !== "portfolio" || !P) return;
+    $("#pH").checked = P.holdings; $("#pW").checked = P.watchlists;
+    $("#pHn").textContent = `(${P.counts.holdings})`; $("#pWn").textContent = `(${P.counts.watchlists})`;
+    const tag = (t) => `<span class="tag ${t === "Holding" ? "h" : t === "Added here" ? "a" : ""}">${esc(t)}</span>`;
+    $("#pBody").innerHTML = (P.rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>Company</th><th>Data</th><th class="r">Price</th><th class="r">Day</th><th>Next up</th><th>Latest results</th><th>Futures</th><th>Why it's here</th><th></th></tr></thead><tbody>
+      ${P.rows.map((r) => `<tr><td><a href="/research.html?symbol=${encodeURIComponent(r.symbol)}" target="_blank"><b>${esc(r.symbol)}</b></a><div class="dim" style="font-size:11px">${esc(r.name)}</div></td>
+        <td class="dim" style="font-size:11.5px">${r.market ? esc(r.market) : r.updated ? "–" : '<span class="spin"></span> loading filings…'}</td>
+        <td class="r num">${r.price == null ? "–" : price(r.price)} <span class="dim" style="font-size:10px">${esc(r.currency || "")}</span></td><td class="r num ${cls(r.changePct)}">${r.changePct == null ? "–" : pct(r.changePct, 2)}</td>
+        <td style="font-size:12px">${r.next ? `<b>${fmtD(r.next.date)}</b> <span class="dim">${esc(r.next.what)}</span>` : '<span class="dim">–</span>'}</td>
+        <td style="font-size:12px">${r.lastResult ? `${fmtD(r.lastResult.date)} <span class="dim">${esc(r.lastResult.source || "")}</span>` : '<span class="dim">–</span>'}</td>
+        <td class="dim" style="font-size:11px">${(r.futures || []).map((f) => esc(f.split(":")[1])).join(", ") || "–"}</td>
+        <td>${r.sources.map(tag).join("")}</td><td><button class="xbtn" data-rm="${esc(r.symbol)}" data-tip="Stop following ${esc(r.symbol)} on the Daily Desk">✕</button></td></tr>`).join("")}</tbody></table></div>`
+      : empty("Nothing tracked yet. Add a company above, or switch on your holdings / watchlists."))
+      + (P.excluded.length ? `<div style="margin-top:12px;font-size:12.5px" class="dim">Not followed on the desk: ${P.excluded.map((s) => `<span class="chip" style="cursor:pointer" data-rs="${esc(s)}" data-tip="Follow again">↺ ${esc(s)}</span>`).join(" ")}</div>` : "");
+    document.querySelectorAll("[data-rm]").forEach((b) => (b.onclick = () => { const r = P.rows.find((x) => x.symbol === b.dataset.rm);
+      editP({ remove: b.dataset.rm }, r && r.sources.some((t) => t !== "Added here") ? `Stopped following ${b.dataset.rm} here (your holdings and watchlists are unchanged)` : `Removed ${b.dataset.rm}`); }));
+    document.querySelectorAll("[data-rs]").forEach((b) => (b.onclick = () => editP({ restore: b.dataset.rs }, `Following ${b.dataset.rs} again`)));
+    if (P.rows.some((r) => r.filings && !r.updated)) { clearTimeout(renderP.t); renderP.t = setTimeout(async () => { if (tab === "portfolio") { P = await api("/api/desk/portfolio"); renderP(); } }, 6000); }
+  }
+  async function editP(body, msg) {
+    const r = await api("/api/desk/portfolio", { body }).catch((e) => { TS.toast(e.message); return null; });
+    if (!r) return;
+    P = r; renderP(); TS.toast(msg);
+    [D, A] = await Promise.all([api("/api/desk"), api("/api/alerts")]); renderJobs();
+  }
+
   let pollT;
   function poll() { clearTimeout(pollT); pollT = setTimeout(async () => { const prev = JSON.stringify(D.status); D = await api("/api/desk"); if (JSON.stringify(D.status) !== prev) { box = await api("/api/inbox"); renderJobs(); setTab(tab); } if (Object.values(D.status).some((j) => j.running || !j.last)) poll(); }, 4000); }
 
   function setTab(t) {
     tab = t; history.replaceState(null, "", "#" + t);
     document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
-    ({ inbox, roll, results, concalls, divs, upcoming })[t]();
+    ({ inbox, portfolio, roll, results, concalls, divs, upcoming })[t]();
   }
   document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => setTab(b.dataset.t)));
   const comps = () => Object.entries(D.companies);
@@ -127,7 +257,7 @@
 
   // ---- inbox
   function inbox() {
-    $("#body").innerHTML = `<div class="filters2"><span class="muted" style="font-size:12.5px">You get a message only when something new appears for a company you hold or watch, plus the morning roll-cost updates (India and international).</span><span class="spacer"></span>
+    $("#body").innerHTML = `<div class="filters2"><span class="muted" style="font-size:12.5px">You get a message only when something new appears for a company on your Portfolio tab, plus the morning roll-cost updates (India and international).</span><span class="spacer"></span>
       ${box.some((m) => !m.read) ? '<button class="btn sm" id="allRead">✓ Mark all read</button>' : ""}</div>` +
       (box.map((m) => `<div class="msg ${m.read ? "" : "unread"}" data-id="${m.id}"><div class="hd"><span>${ICON[m.job] || "📬"}</span><b style="flex:1">${esc(m.title)}</b><span class="dim" style="font-size:12px">${fmtT(m.t)}</span></div>
         <div class="bd md">${md(m.body)}${(m.items || []).length ? `<div class="chips" style="margin-top:6px">${[...new Set(m.items.map((i) => i.symbol))].slice(0, 20).map((s) => `<a class="chip" href="/research.html?symbol=${encodeURIComponent(s)}" target="_blank">${esc(s)}</a>`).join("")}</div>` : ""}</div></div>`).join("")
