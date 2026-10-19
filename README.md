@@ -262,12 +262,24 @@ off or asleep at a scheduled time, the missed job runs as soon as you start Casu
 | Job | When (IST) | What it does |
 |---|---|---|
 | **NSE futures roll cost** | 09:01 daily (before the 09:15 open) | Downloads NSE's official F&O bhavcopy for the **previous trading session's close**. For every stock and index future it computes the near → next-month **roll cost** (points, %, annualised, ₹ per lot), **cost of carry** and **rollover %**. Your F&O stocks are highlighted, and you get the richest and cheapest (negative) rolls. |
+| **Global futures roll cost** | 09:01 daily | The same roll cost for international futures from each exchange's **previous-session settlement**: **US** (CME, CBOT, NYMEX, COMEX, ICE US: index, Treasury, energy, metals, grains, softs, livestock, FX and crypto futures), **Japan** (JPX: Nikkei 225, TOPIX, JGB, gold…), **Singapore** (SGX: Nikkei, FTSE China A50, FTSE Taiwan, MSCI Singapore, iron ore) and **Hong Kong** (HKEX: Hang Seng, HSCEI, HS TECH). Roll per contract is in the contract's currency. Your message shows the futures linked to what you hold or watch (GC=F or GLD → gold, SPY or ^GSPC → E-mini S&P, ^N225 → Nikkei, BTC-USD → CME bitcoin…), benchmarks, contracts in the roll window, and the steepest contango and backwardation. |
 | **Results, concalls & dividends** | 09:01 and 20:01 daily | For every stock in your holdings and watchlists, in **all markets**, it picks up whatever appeared since the previous run (about 11–13 hours earlier). **(A)** Summarises newly declared results. **(B)** Records upcoming concall dates, times, dial-in numbers and passcodes. **(C)** Adds concall transcripts and recordings once they're posted. **(D)** Refreshes every tracked company. **(E)** Keeps the dividend tracker current. Then it messages you **only about what's new**. |
 
 - **Indian stocks:** NSE filings (announcements, corporate actions, board-meeting calendar). Dial-ins are read from the
   notice PDFs, and results and transcripts are summarised by the local AI (marked "verify in the filing", with a link).
-- **Other markets:** Yahoo data (EPS vs estimates, confirmed earnings dates, ex-dividend dates). Transcripts for
-  non-Indian companies need a paid data key.
+- **US stocks:** SEC EDGAR 8-K results press releases, summarised by the local AI and merged with Yahoo's EPS vs
+  estimate. The call time and webcast link and any dividend declared (amount, record and pay dates) are read from the release.
+- **Foreign companies with a US listing** (Toyota, SAP, TSMC, Shell, HSBC…): their SEC 6-K filings, matched by
+  company name, whichever exchange you track them on (7203.T, SAP.DE…).
+- **Hong Kong (.HK):** HKEXnews results announcements, dividend notices and board-meeting dates.
+- **Australia (.AX):** ASX announcements (results, Appendix 4D/4E, dividends). ASX allows free use for private / personal
+  purposes; a commercial site needs ASX's agreement, so set `FILING_SOURCES=sec,hkex` in `.env` until you have one.
+- **Everything else:** Yahoo (EPS vs estimates, confirmed earnings dates, ex-dividend dates).
+- **Transcripts:** NSE companies post them as filings. Elsewhere they aren't filed with regulators (the webcast replay
+  is on the company's IR site), so automatic transcripts need a paid key such as Finnhub or FMP.
+- **Not included:** Eurex and ICE Europe futures (no free settlement prices).
+- **New symbols:** a company you start tracking loads its history quietly; you only hear about what's filed after that.
+- **Mute:** each job has an **Inbox messages** switch on the Daily Desk page.
 - **Inbox:** messages land in the **📬 Inbox** (Command screen header → Daily Desk). You can also get them by email
   (Resend or SMTP in `.env`), and switch email on or off on the Daily Desk page.
 - **Run now:** the Daily Desk page shows every tracker (roll cost, results, concalls and transcripts, dividends, upcoming

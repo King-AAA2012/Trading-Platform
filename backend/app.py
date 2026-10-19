@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from . import ai, auth, billing, config, data, db, desk, engine, extras, markets, optimizer, planner, portfolio, scenario, store, supply_chain
+from . import ai, auth, billing, config, data, db, desk, engine, extras, intl, markets, optimizer, planner, portfolio, scenario, store, supply_chain
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONT = ROOT / "frontend"
@@ -742,8 +742,19 @@ def api_desk():
         r["tracked"] = r["symbol"] in tracked_nse
         h = [v.get(r["symbol"]) for v in roll.get("history", {}).values() if v.get(r["symbol"])]
         r["rolloverTrend"] = [x[1] for x in h][-10:]
+    groll = desk._load(desk.GROLL, {})
+    my_fut: dict[str, list] = {}
+    for s in mine:
+        for i in intl.futures_for(s):
+            my_fut.setdefault(i, []).append(s)
+    ghist = groll.get("history", {})
+    for r in groll.get("rows", []):
+        r["tracked"], r["trackedBy"], r["bench"] = r["id"] in my_fut, my_fut.get(r["id"], []), r["id"] in intl.BENCHMARKS
+        r["rolloverTrend"] = [v[r["id"]][1] for v in ghist.values() if v.get(r["id"]) and v[r["id"]][1] is not None][-10:]
     companies = {k: {kk: vv for kk, vv in corp[k].items() if kk != "seen"} for k in mine if k in corp}
     return J({"status": desk.status(), "tracked": mine, "companies": companies, "roll": {"session": roll.get("session"), "generated": roll.get("generated"), "rows": rows},
+              "groll": {"sessions": groll.get("sessions", {}), "generated": groll.get("generated"), "rows": groll.get("rows", []), "errors": groll.get("errors", [])},
+              "mute": st["profile"].get("deskMute") or [],
               "unread": sum(1 for m in st.get("inbox", []) if not m.get("read")), "notifyEmail": bool(st["profile"].get("notifyEmail")),
               "canRun": config.PRIVATE or _is_admin(), "emailReady": bool(config.E("RESEND_API_KEY", "") or config.E("SMTP_HOST", ""))})
 
@@ -778,7 +789,10 @@ def api_inbox_read(body: dict = Body(default={})):
 @app.post("/api/desk/settings")
 def api_desk_settings(body: dict = Body(...)):
     st = store.load()
-    st["profile"]["notifyEmail"] = bool(body.get("notifyEmail"))
+    if "notifyEmail" in body:
+        st["profile"]["notifyEmail"] = bool(body["notifyEmail"])
+    if "mute" in body:                                # jobs whose inbox messages this user switched off
+        st["profile"]["deskMute"] = [j for j in (body.get("mute") or []) if j in desk.SCHEDULE]
     store.save(st)
     return J({"ok": True})
 

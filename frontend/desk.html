@@ -9,7 +9,7 @@
 <style>
   body { overflow: auto; }
   .wrap { max-width: 1380px; margin: 0 auto; padding: 14px 18px 40px; }
-  .jobs { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; margin-bottom: 12px; align-items: stretch; }
+  .jobs { display: grid; grid-template-columns: repeat(3, 1fr) minmax(230px, .8fr); gap: 12px; margin-bottom: 12px; align-items: stretch; }
   .job { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
   .job h4 { margin: 0 0 4px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
   .job .meta { font-size: 12px; color: var(--muted); }
@@ -32,6 +32,9 @@
   .dial:hover { border-color: var(--accent); }
   .filters2 { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
   .ev { display: grid; grid-template-columns: 110px 90px 1fr; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; align-items: center; }
+  .job .check { font-size: 12px; margin-top: 6px; }
+  .src { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line2); border-radius: 5px; padding: 0 5px; margin-left: 4px; }
+  @media (max-width: 1250px) { .jobs { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 900px) { .jobs { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -57,6 +60,10 @@
   const $ = (s) => document.querySelector(s);
   const { api, esc, price, pct, cls } = TS;
   let D = null, box = [], tab = location.hash.slice(1) || "inbox", rollF = "tracked", rollQ = "", rollSort = ["symbol", 1];
+  let rollM = null, gF = "tracked", gK = "all", gR = "all", gSort = null;
+  const ICON = { roll: "⛽", groll: "🌍", calendar: "📊" };
+  const CUR = { USD: "$", JPY: "¥", HKD: "HK$", SGD: "S$", INR: "₹" };
+  const fx = (v, d) => v == null ? "–" : Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
   const fmtT = (t) => t ? new Date(t * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "–";
   const fmtD = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" }) : "–";
   const ist = () => new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
@@ -84,17 +91,24 @@
   function renderJobs() {
     const card = (k) => {
       const j = D.status[k], r = j.result || {};
-      const res = k === "roll" ? (r.session ? `Session ${r.session} · ${r.count} contracts` : "") : (r.companies != null ? `${r.companies} companies · ${r.new} new item(s)${r.bootstrap ? " · first run (tracker set up)" : ""}` : "");
-      return `<div class="job"><h4>${k === "roll" ? "⛽" : "📊"} ${esc(j.label)} ${j.running ? '<span class="spin"></span><span class="muted" style="font-weight:400">running…</span>' : ""}</h4>
+      const res = k === "roll" ? (r.session ? `Session ${r.session} · ${r.count} contracts` : "")
+        : k === "groll" ? (r.sessions ? `${Object.entries(r.sessions).map(([n, d]) => `${n.split(" (")[0]} ${d.slice(5)}`).join(" · ")} · ${r.count} contracts` : "")
+        : (r.companies != null ? `${r.companies} companies · ${r.new} new item(s)${r.bootstrap ? " · first run (tracker set up)" : ""}` : "");
+      return `<div class="job"><h4>${ICON[k]} ${esc(j.label)} ${j.running ? '<span class="spin"></span><span class="muted" style="font-weight:400">running…</span>' : ""}</h4>
         <div class="meta">Runs daily at <b>${j.schedule.join(" & ")}</b> · next ${fmtT(j.next)}</div>
         <div class="meta">Last run: ${j.last ? `${fmtT(j.last)} · ${j.ok ? '<span class="up">✓ ok</span>' : `<span class="down" data-tip="${esc(j.error || "")}">✗ failed</span>`} · ${j.duration}s` : "not yet"}${res ? " · " + esc(res) : ""}</div>
-        ${D.canRun ? `<button class="btn sm" data-run="${k}" style="margin-top:6px" ${j.running ? "disabled" : ""}>▶ Run now</button>` : ""}</div>`;
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${D.canRun ? `<button class="btn sm" data-run="${k}" style="margin-top:6px" ${j.running ? "disabled" : ""}>▶ Run now</button>` : ""}
+        <label class="check" data-tip="Switch this job's inbox messages (and emails) on or off. The tables on this page keep updating either way."><input type="checkbox" data-mute="${k}" ${D.mute.includes(k) ? "" : "checked"}> Inbox messages</label></div></div>`;
     };
-    $("#jobs").innerHTML = card("roll") + card("calendar") + `<div class="job" style="min-width:230px"><h4>✉️ Email me updates</h4>
+    $("#jobs").innerHTML = card("roll") + card("groll") + card("calendar") + `<div class="job"><h4>✉️ Email me updates</h4>
       <label class="check"><input type="checkbox" id="em" ${D.notifyEmail ? "checked" : ""} ${D.emailReady ? "" : "disabled"}> Send each new message by email too</label>
       <div class="meta" style="margin-top:4px">${D.emailReady ? "Messages always appear in the inbox here." : "Email isn't set up on this server yet (add SMTP or Resend details to .env). Messages appear in the inbox."}</div>
       <div class="meta" style="margin-top:4px">Tracking <b>${D.tracked.length}</b> symbols from your holdings & watchlists.</div></div>`;
     document.querySelectorAll("[data-run]").forEach((b) => (b.onclick = async () => { b.disabled = true; b.innerHTML = '<span class="spin"></span> Running'; await api("/api/desk/run", { body: { job: b.dataset.run } }).catch((e) => TS.toast(e.message)); poll(); }));
+    document.querySelectorAll("[data-mute]").forEach((c) => (c.onchange = () => {
+      D.mute = [...document.querySelectorAll("[data-mute]")].filter((x) => !x.checked).map((x) => x.dataset.mute);
+      api("/api/desk/settings", { body: { mute: D.mute } }).then(() => TS.toast(c.checked ? "Messages on" : "Messages off — tables still update"));
+    }));
     const em = $("#em"); if (em) em.onchange = () => api("/api/desk/settings", { body: { notifyEmail: em.checked } }).then(() => TS.toast(em.checked ? "Email updates on" : "Email updates off"));
     const n = box.filter((m) => !m.read).length;
     $("#nUnread").style.display = n ? "" : "none"; $("#nUnread").textContent = n;
@@ -113,9 +127,9 @@
 
   // ---- inbox
   function inbox() {
-    $("#body").innerHTML = `<div class="filters2"><span class="muted" style="font-size:12.5px">You get a message only when something new appears for a company you hold or watch, plus the morning roll-cost update.</span><span class="spacer"></span>
+    $("#body").innerHTML = `<div class="filters2"><span class="muted" style="font-size:12.5px">You get a message only when something new appears for a company you hold or watch, plus the morning roll-cost updates (India and international).</span><span class="spacer"></span>
       ${box.some((m) => !m.read) ? '<button class="btn sm" id="allRead">✓ Mark all read</button>' : ""}</div>` +
-      (box.map((m) => `<div class="msg ${m.read ? "" : "unread"}" data-id="${m.id}"><div class="hd"><span>${m.job === "roll" ? "⛽" : "📊"}</span><b style="flex:1">${esc(m.title)}</b><span class="dim" style="font-size:12px">${fmtT(m.t)}</span></div>
+      (box.map((m) => `<div class="msg ${m.read ? "" : "unread"}" data-id="${m.id}"><div class="hd"><span>${ICON[m.job] || "📬"}</span><b style="flex:1">${esc(m.title)}</b><span class="dim" style="font-size:12px">${fmtT(m.t)}</span></div>
         <div class="bd md">${md(m.body)}${(m.items || []).length ? `<div class="chips" style="margin-top:6px">${[...new Set(m.items.map((i) => i.symbol))].slice(0, 20).map((s) => `<a class="chip" href="/research.html?symbol=${encodeURIComponent(s)}" target="_blank">${esc(s)}</a>`).join("")}</div>` : ""}</div></div>`).join("")
        || empty("No messages yet. The first run sets up your trackers, then you'll hear about anything new at 09:01 and 20:01 IST."));
     document.querySelectorAll(".msg .hd").forEach((h) => (h.onclick = () => {
@@ -128,8 +142,14 @@
 
   // ---- roll cost
   function roll() {
+    if (!rollM) rollM = D.roll.rows.some((r) => r.tracked) || !(D.groll.rows || []).some((r) => r.tracked) ? "nse" : "intl";
+    const seg = `<div class="seg" id="rm"><button data-v="nse" class="${rollM === "nse" ? "on" : ""}">🇮🇳 India (NSE)</button><button data-v="intl" class="${rollM === "intl" ? "on" : ""}">🌍 International</button></div>`;
+    rollM === "nse" ? rollNse(seg) : rollIntl(seg);
+    document.querySelectorAll("#rm button").forEach((b) => (b.onclick = () => { rollM = b.dataset.v; rollQ = ""; roll(); }));
+  }
+  function rollNse(seg) {
     const R = D.roll;
-    if (!R.session) { $("#body").innerHTML = empty("The first roll-cost run hasn't happened yet. It runs at 09:01 IST" + (D.canRun ? ", or press ▶ Run now above." : ".")); return; }
+    if (!R.session) { $("#body").innerHTML = `<div class="filters2">${seg}</div>` + empty("The first roll-cost run hasn't happened yet. It runs at 09:01 IST" + (D.canRun ? ", or press ▶ Run now above." : ".")); return; }
     let rows = R.rows.filter((r) => (rollF === "all" || (rollF === "tracked" ? r.tracked : rollF === "index" ? r.kind === "Index" : r.rollPts < 0)) && (!rollQ || r.symbol.includes(rollQ.toUpperCase())));
     if (rollF === "tracked" && !rows.length) rows = R.rows.filter((r) => r.kind === "Index");
     const [k, dir] = rollSort, val = (r) => k.includes(".") ? k.split(".").reduce((o, p) => o && o[p], r) : r[k];
@@ -137,7 +157,7 @@
     const th = (key, label, tip) => `<th data-k="${key}" class="${key === "symbol" ? "" : "r"}" ${tip ? `data-tip="${esc(tip)}"` : ""}>${label}${rollSort[0] === key ? (rollSort[1] > 0 ? " ▲" : " ▼") : ""}</th>`;
     $("#body").innerHTML = `<div class="hint" style="margin-bottom:10px">Prices are the <b>${fmtD(R.session)}</b> session close from NSE's official F&O bhavcopy, refreshed at 09:01 IST before the 09:15 open.
         <b>Roll cost</b> = next-month future − near-month future: what it costs to roll a long position forward (a negative roll pays you, often ahead of a dividend). <b>Rollover %</b> = share of open interest already in the next month.</div>
-      <div class="filters2"><div class="seg" id="rf">${[["tracked", "My stocks"], ["all", "All F&O"], ["index", "Indices"], ["neg", "Negative rolls"]].map(([v, l]) => `<button data-v="${v}" class="${rollF === v ? "on" : ""}">${l}</button>`).join("")}</div>
+      <div class="filters2">${seg}<div class="seg" id="rf">${[["tracked", "My stocks"], ["all", "All F&O"], ["index", "Indices"], ["neg", "Negative rolls"]].map(([v, l]) => `<button data-v="${v}" class="${rollF === v ? "on" : ""}">${l}</button>`).join("")}</div>
         <input class="in" id="rq" placeholder="Search symbol…" style="width:180px" value="${esc(rollQ)}"><span class="dim" style="font-size:12px">${rows.length} contracts${rollF === "tracked" && !R.rows.some((r) => r.tracked) ? " · none of your stocks are in F&O, showing indices" : ""}</span></div>
       <div class="tbl-wrap"><table class="t"><thead><tr>${th("symbol", "Symbol")}${th("spot", "Spot")}${th("near.close", "Near fut", "Near-month future close")}${th("next.close", "Next fut", "Next-month future close")}
         ${th("rollPts", "Roll pts")}${th("rollPct", "Roll %")}${th("rollAnn", "Annualised", "Roll % scaled to a year using the days between expiries")}${th("lot", "Lot")}${th("rollPerLot", "Roll ₹/lot")}
@@ -152,12 +172,50 @@
     document.querySelectorAll("th[data-k]").forEach((h) => (h.onclick = () => { rollSort = [h.dataset.k, rollSort[0] === h.dataset.k ? -rollSort[1] : (h.dataset.k === "symbol" ? 1 : -1)]; roll(); }));
   }
 
+  // ---- international futures roll cost
+  function rollIntl(seg) {
+    const G = D.groll, all = G.rows || [];
+    if (!all.length) { $("#body").innerHTML = `<div class="filters2">${seg}</div>` + empty("The first international roll-cost run hasn't happened yet. It runs at 09:01 IST" + (D.canRun ? ", or press ▶ Run now above." : ".")); return; }
+    const kinds = [...new Set(all.map((r) => r.kind))], mkts = [...new Set(all.map((r) => r.market))];
+    const pass = (r) => (gK === "all" || r.kind === gK) && (gR === "all" || r.market === gR) && (!rollQ || `${r.symbol} ${r.name} ${r.exchange}`.toUpperCase().includes(rollQ.toUpperCase()));
+    let rows = all.filter((r) => pass(r) && (gF === "all" || (gF === "tracked" ? r.tracked : gF === "bench" ? r.bench : gF === "window" ? r.daysNear <= 7 : r.rollPts < 0)));
+    const fallback = gF === "tracked" && !rows.length;
+    if (fallback) rows = all.filter((r) => pass(r) && r.bench);
+    if (gSort) { const [k, dir] = gSort, val = (r) => k.includes(".") ? k.split(".").reduce((o, p) => o && o[p], r) : r[k]; rows = [...rows].sort((a, b) => { const x = val(a), y = val(b); return (typeof x === "string" ? x.localeCompare(y) : (x ?? -1e18) - (y ?? -1e18)) * dir; }); }
+    const th = (key, label, tip) => `<th data-g="${key}" class="${["symbol", "exchange"].includes(key) ? "" : "r"}" ${tip ? `data-tip="${esc(tip)}"` : ""}>${label}${gSort && gSort[0] === key ? (gSort[1] > 0 ? " ▲" : " ▼") : ""}</th>`;
+    const sess = Object.entries(G.sessions || {}).map(([n, d]) => `${esc(n)} <b>${fmtD(d)}</b>`).join(" · ");
+    $("#body").innerHTML = `<div class="hint" style="margin-bottom:10px">Each exchange's previous-session <b>settlement</b> prices — ${sess}. Refreshed at 09:01 IST.
+        <b>Roll</b> = next contract − near contract (for commodities + is contango: rolling a long costs money; − is backwardation: it pays). <b>Per contract</b> = roll × contract size, in the contract's currency.
+        <b>Rollover %</b> = share of open interest already in the next contract (JPX doesn't publish it). Eurex and ICE Europe aren't included: they don't publish settlement prices for free.
+        ${(G.errors || []).length ? `<div class="warn" style="margin-top:4px">Last run: ${esc(G.errors.join("; "))} (showing the last good prices for that exchange).</div>` : ""}</div>
+      <div class="filters2">${seg}<div class="seg" id="gf">${[["tracked", "My futures"], ["bench", "Benchmarks"], ["all", "All"], ["window", "Roll window ≤7d"], ["neg", "Negative rolls"]].map(([v, l]) => `<button data-v="${v}" class="${gF === v ? "on" : ""}">${l}</button>`).join("")}</div>
+        <select class="in" id="gk" style="width:auto"><option value="all">All asset classes</option>${kinds.map((k) => `<option ${gK === k ? "selected" : ""}>${k}</option>`).join("")}</select>
+        <select class="in" id="gr" style="width:auto"><option value="all">All markets</option>${mkts.map((m) => `<option ${gR === m ? "selected" : ""}>${m}</option>`).join("")}</select>
+        <input class="in" id="rq" placeholder="Search contract…" style="width:170px" value="${esc(rollQ)}"><span class="dim" style="font-size:12px">${rows.length} contracts${fallback ? " · no futures linked to your holdings/watchlists yet (e.g. GC=F, SPY, ^N225, BTC-USD), showing benchmarks" : ""}</span></div>
+      <div class="tbl-wrap"><table class="t"><thead><tr>${th("symbol", "Contract")}${th("exchange", "Exchange")}${th("spot", "Spot")}${th("near.close", "Near", "Near contract settlement")}${th("next.close", "Next", "Next contract settlement")}
+        ${th("rollPts", "Roll")}${th("rollPct", "Roll %")}${th("rollAnn", "Annualised", "Roll % scaled to a year using the days between the two expiries")}${th("lot", "Size", "Contract multiplier: currency per 1.0 of price")}${th("rollPerLot", "Roll / contract")}
+        ${th("carryAnn", "Carry p.a.", "Near future vs spot, annualised (index, FX & crypto)")}${th("rollover", "Rollover %")}<th>Rollover trend</th>${th("daysNear", "Days left", "Days to the near contract's last trading day")}</tr></thead><tbody>
+        ${rows.map((r) => { const d = r.decimals ?? 2, c = CUR[r.currency] || r.currency + " "; return `<tr class="${r.tracked ? "tracked" : ""}">
+          <td><b>${esc(r.symbol)}</b> <span class="dim" style="font-size:11px">${esc(r.name)}</span><span class="src">${esc(r.kind)}</span>${r.trackedBy && r.trackedBy.length ? `<div class="dim" style="font-size:10.5px">for ${r.trackedBy.map(esc).join(", ")}</div>` : ""}</td>
+          <td>${esc(r.exchange)}<div class="dim" style="font-size:10px">${esc(r.market)}</div></td><td class="r num">${r.spot == null ? "–" : fx(r.spot, d)}</td>
+          <td class="r num">${fx(r.near.close, d)}<div class="dim" style="font-size:10px">${esc(r.near.month)} · ${fmtD(r.near.expiry)}</div></td><td class="r num">${fx(r.next.close, d)}<div class="dim" style="font-size:10px">${esc(r.next.month)} · ${fmtD(r.next.expiry)}</div></td>
+          <td class="r num ${cls(r.rollPts)}">${r.rollPts > 0 ? "+" : ""}${fx(r.rollPts, d)}</td><td class="r num ${cls(r.rollPct)}">${pct(r.rollPct, 2)}</td><td class="r num ${cls(r.rollAnn)}"><b>${pct(r.rollAnn, 1)}</b></td>
+          <td class="r num">${Number(r.lot).toLocaleString()}</td><td class="r num ${cls(r.rollPerLot)}">${r.rollPerLot < 0 ? "−" : ""}${c}${Math.abs(Math.round(r.rollPerLot)).toLocaleString()}</td>
+          <td class="r num ${cls(r.carryAnn)}">${r.carryAnn == null ? "–" : pct(r.carryAnn, 1)}</td><td class="r num">${r.rollover == null ? "–" : r.rollover.toFixed(1) + "%"}</td>
+          <td>${(r.rolloverTrend || []).length > 1 ? TS.spark(r.rolloverTrend, 70, 20) : ""}</td><td class="r num ${r.daysNear <= 7 ? "warn" : ""}">${r.daysNear}</td></tr>`; }).join("")}</tbody></table></div>`;
+    document.querySelectorAll("#gf button").forEach((b) => (b.onclick = () => { gF = b.dataset.v; roll(); }));
+    $("#gk").onchange = (e) => { gK = e.target.value; roll(); };
+    $("#gr").onchange = (e) => { gR = e.target.value; roll(); };
+    $("#rq").oninput = (e) => { rollQ = e.target.value; const pos = e.target.selectionStart; roll(); const q = $("#rq"); q.focus(); q.setSelectionRange(pos, pos); };
+    document.querySelectorAll("th[data-g]").forEach((h) => (h.onclick = () => { gSort = [h.dataset.g, gSort && gSort[0] === h.dataset.g ? -gSort[1] : (["symbol", "exchange"].includes(h.dataset.g) ? 1 : -1)]; roll(); }));
+  }
+
   // ---- results
   function results() {
     const list = comps().filter(([, c]) => (c.results || []).length).sort((a, b) => (b[1].results[0].date || "").localeCompare(a[1].results[0].date || ""));
     $("#body").innerHTML = list.map(([s, c]) => `<div class="card2"><h3><a href="/research.html?symbol=${encodeURIComponent(s)}" target="_blank">${esc(s)}</a> <span class="muted" style="font-size:13px;font-weight:400">${esc(c.name || "")} · ${esc(c.market || "")}</span></h3>
         ${c.results.slice(0, 3).map((r, i) => `<div style="padding:6px 0;${i ? "border-top:1px dashed var(--line)" : ""}"><b>${fmtD(r.date)}</b>${r.period ? ` · period ended ${esc(r.period)}` : ""}${r.ai ? ' · <span class="warn" style="font-size:11px">AI summary, verify in the filing</span>' : ""}
-          ${(r.links || (r.link ? [r.link] : [])).map((l, k) => ` · <a href="${esc(l)}" target="_blank" rel="noopener noreferrer">filing${k ? " " + (k + 1) : ""}</a>`).join("")}<div class="md" style="font-size:13px">${md(r.summary)}</div></div>`).join("")}</div>`).join("")
+          ${r.source && r.source !== "Yahoo" ? `<span class="src">${esc(r.source)}</span>` : ""}${(r.links || (r.link ? [r.link] : [])).map((l, k) => ` · <a href="${esc(l)}" target="_blank" rel="noopener noreferrer">filing${k ? " " + (k + 1) : ""}</a>`).join("")}<div class="md" style="font-size:13px">${md(r.summary)}</div></div>`).join("")}</div>`).join("")
       || empty("No results recorded yet for your tracked companies.");
   }
 
@@ -176,7 +234,7 @@
       <h4 class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px">Concall & transcript tracker</h4>
       <div class="tbl-wrap" style="margin-bottom:14px"><table class="t"><thead><tr><th>Date</th><th>Company</th><th>Transcript</th><th>Recording</th><th>Notice</th></tr></thead><tbody>
       ${held.slice(0, 80).map(({ s, c, x }) => `<tr><td>${fmtD(x.date || x.announced)}</td><td><b>${esc(s)}</b> <span class="dim" style="font-size:11px">${esc(c.name || "")}</span></td>
-        <td>${x.transcript ? `<a href="${esc(x.transcript)}" target="_blank" rel="noopener noreferrer">📝 transcript</a>` : `<span class="dim">${c.transcriptNote && !x.notice ? "needs data key" : "awaiting"}</span>`}</td>
+        <td>${x.transcript ? `<a href="${esc(x.transcript)}" target="_blank" rel="noopener noreferrer">📝 transcript</a>` : c.transcriptNote ? `<span class="dim" data-tip="${esc(c.transcriptNote)}">replay on IR site${(x.links || []).length ? ` · <a href="${esc(x.links[0])}" target="_blank" rel="noopener noreferrer">webcast</a>` : ""}</span>` : '<span class="dim">awaiting</span>'}</td>
         <td>${x.recording ? `<a href="${esc(x.recording)}" target="_blank" rel="noopener noreferrer">🎧 recording</a>` : '<span class="dim">–</span>'}</td><td>${x.notice ? `<a href="${esc(x.notice)}" target="_blank" rel="noopener noreferrer">notice</a>` : '<span class="dim">–</span>'}</td></tr>`).join("")
       || '<tr><td colspan="5" class="empty">No past concalls recorded yet.</td></tr>'}</tbody></table></div>
       <h4 class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px">Latest transcripts</h4>
@@ -190,11 +248,11 @@
     const all = []; comps().forEach(([s, c]) => (c.dividends || []).forEach((d) => all.push({ s, c, d })));
     all.sort((a, b) => (b.d.exDate || b.d.declared || "").localeCompare(a.d.exDate || a.d.declared || ""));
     const today = new Date().toISOString().slice(0, 10);
-    $("#body").innerHTML = `<div class="tbl-wrap"><table class="t"><thead><tr><th>Company</th><th>Dividend</th><th class="r">Amount</th><th>Ex-date</th><th>Record date</th><th>Declared</th><th>Source</th></tr></thead><tbody>
+    $("#body").innerHTML = `<div class="tbl-wrap"><table class="t"><thead><tr><th>Company</th><th>Dividend</th><th class="r">Amount</th><th>Ex-date</th><th>Record date</th><th>Pay date</th><th>Declared</th><th>Source</th></tr></thead><tbody>
       ${all.map(({ s, c, d }) => `<tr class="${d.exDate && d.exDate >= today ? "tracked" : ""}"><td><b>${esc(s)}</b><div class="dim" style="font-size:11px">${esc(c.name || "")}</div></td><td style="white-space:normal;max-width:420px">${esc(d.subject || "")}</td>
-        <td class="r num">${d.amount ?? "–"}</td><td>${d.exDate ? fmtD(d.exDate) + (d.exDate >= today ? ' <span class="pill" style="font-size:10px;padding:0 5px">upcoming</span>' : "") : "–"}</td><td>${esc(d.recordDate || "–")}</td>
+        <td class="r num">${d.amount ?? "–"}</td><td>${d.exDate ? fmtD(d.exDate) + (d.exDate >= today ? ' <span class="pill" style="font-size:10px;padding:0 5px">upcoming</span>' : "") : "–"}</td><td>${esc(d.recordDate || "–")}</td><td>${esc(d.payDate || "–")}</td>
         <td>${d.declared ? fmtD(d.declared) : "–"}</td><td class="dim">${esc(d.source || "")}${d.link ? ` · <a href="${esc(d.link)}" target="_blank" rel="noopener noreferrer">filing</a>` : ""}</td></tr>`).join("")
-      || '<tr><td colspan="7" class="empty">No dividends recorded yet.</td></tr>'}</tbody></table></div>`;
+      || '<tr><td colspan="8" class="empty">No dividends recorded yet.</td></tr>'}</tbody></table></div>`;
   }
 
   // ---- upcoming
