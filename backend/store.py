@@ -22,6 +22,7 @@ DEFAULT = {
     "journal": [],         # recorded trades {t, symbol, action, qty, price, value, realized}
     "notes": {},           # {symbol: text}
     "screens": {},         # saved screener filters {name: {...}}
+    "inbox": [],           # Daily Desk messages {id, t, job, title, body, items, read}
 }
 
 

@@ -254,6 +254,25 @@ opens.
 **AI assistant**
 - Floating ✨ chat on the Command screen with your plan as context.
 
+## Daily Desk 📬 (scheduled jobs)
+
+CasuallyHedge runs these automatically while the server is running (`start.bat` or `Private Start.bat`). If your PC was
+off or asleep at a scheduled time, the missed job runs as soon as you start CasuallyHedge again.
+
+| Job | When (IST) | What it does |
+|---|---|---|
+| **NSE futures roll cost** | 09:01 daily (before the 09:15 open) | Downloads NSE's official F&O bhavcopy for the **previous trading session's close**. For every stock and index future it computes the near → next-month **roll cost** (points, %, annualised, ₹ per lot), **cost of carry** and **rollover %**. Your F&O stocks are highlighted, and you get the richest and cheapest (negative) rolls. |
+| **Results, concalls & dividends** | 09:01 and 20:01 daily | For every stock in your holdings and watchlists, in **all markets**, it picks up whatever appeared since the previous run (about 11–13 hours earlier). **(A)** Summarises newly declared results. **(B)** Records upcoming concall dates, times, dial-in numbers and passcodes. **(C)** Adds concall transcripts and recordings once they're posted. **(D)** Refreshes every tracked company. **(E)** Keeps the dividend tracker current. Then it messages you **only about what's new**. |
+
+- **Indian stocks:** NSE filings (announcements, corporate actions, board-meeting calendar). Dial-ins are read from the
+  notice PDFs, and results and transcripts are summarised by the local AI (marked "verify in the filing", with a link).
+- **Other markets:** Yahoo data (EPS vs estimates, confirmed earnings dates, ex-dividend dates). Transcripts for
+  non-Indian companies need a paid data key.
+- **Inbox:** messages land in the **📬 Inbox** (Command screen header → Daily Desk). You can also get them by email
+  (Resend or SMTP in `.env`), and switch email on or off on the Daily Desk page.
+- **Run now:** the Daily Desk page shows every tracker (roll cost, results, concalls and transcripts, dividends, upcoming
+  dates), with **▶ Run now** buttons in private mode or for `COMP_EMAILS` admins.
+
 ## Supply chain explorer ⛓
 
 Open it from any stock's Research screen (**⛓ Supply chain**, or press `K`), from **🧰 Tools → Supply chain**, or at

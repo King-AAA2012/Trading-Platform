@@ -14,20 +14,25 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from . import ai, auth, billing, config, data, db, engine, extras, markets, optimizer, planner, portfolio, scenario, store, supply_chain
+from . import ai, auth, billing, config, data, db, desk, engine, extras, markets, optimizer, planner, portfolio, scenario, store, supply_chain
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONT = ROOT / "frontend"
 app = FastAPI(title=config.APP_NAME, version="3.0", docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(auth.router)
 app.include_router(billing.router)
+
+
+@app.on_event("startup")
+def _start_jobs():
+    desk.start_scheduler()          # 09:01 IST roll cost; 09:01 & 20:01 IST results/concalls/dividends (catches up missed runs)
 _scan_cache: dict[str, tuple[float, list, dict]] = {}
 
 
 # pages and APIs anyone may reach without an account
 PUBLIC_API = ("/api/auth/", "/api/config", "/api/billing/webhook")
 MEMBER_API = ("/api/me", "/api/billing/")          # need login, but not an active subscription
-APP_PAGES = ("/app", "/index.html", "/research.html", "/report.html", "/account.html", "/chain.html")
+APP_PAGES = ("/app", "/index.html", "/research.html", "/report.html", "/account.html", "/chain.html", "/desk.html")
 
 
 @app.middleware("http")
@@ -715,6 +720,77 @@ def api_ai_chain(body: dict = Body(...)):
                   "'## What to watch'. Use the data given; say when you are unsure.")
     fb = "## Verified links\n" + ("\n".join(line(e) for e in g["edges"][:40]) or "None in our database yet.") + "\n\n*(Start Ollama for an AI explanation.)*"
     return _text_stream(ai.stream([{"role": "user", "content": prompt}]), fb)
+
+
+# ---------------------------------------------------------------- daily desk (scheduled jobs + inbox)
+def _my_symbols(st: dict) -> list[str]:
+    s = {h["symbol"] for h in st.get("holdings", []) if h.get("symbol")} | set(st.get("watchlist") or [])
+    for lst in (st.get("watchlists") or {}).values():
+        s |= set(lst)
+    return sorted(s)
+
+
+@app.get("/api/desk")
+def api_desk():
+    st = store.load()
+    mine = _my_symbols(st)
+    corp = desk._load(desk.CORP, {})
+    roll = desk._load(desk.ROLL, {})
+    tracked_nse = {desk._nse_symbol(x) for x in mine} - {None}
+    rows = roll.get("rows", [])
+    for r in rows:
+        r["tracked"] = r["symbol"] in tracked_nse
+        h = [v.get(r["symbol"]) for v in roll.get("history", {}).values() if v.get(r["symbol"])]
+        r["rolloverTrend"] = [x[1] for x in h][-10:]
+    companies = {k: {kk: vv for kk, vv in corp[k].items() if kk != "seen"} for k in mine if k in corp}
+    return J({"status": desk.status(), "tracked": mine, "companies": companies, "roll": {"session": roll.get("session"), "generated": roll.get("generated"), "rows": rows},
+              "unread": sum(1 for m in st.get("inbox", []) if not m.get("read")), "notifyEmail": bool(st["profile"].get("notifyEmail")),
+              "canRun": config.PRIVATE or _is_admin(), "emailReady": bool(config.E("RESEND_API_KEY", "") or config.E("SMTP_HOST", ""))})
+
+
+def _is_admin() -> bool:
+    uid = store.current_uid.get()
+    u = db.q("SELECT email FROM users WHERE id=?", (uid,), one=True) if uid else None
+    return bool(u and u["email"].lower() in config.COMP_EMAILS)
+
+
+@app.get("/api/inbox")
+def api_inbox(unread: bool = False):
+    box = store.load().get("inbox", [])
+    if unread:
+        return J({"unread": sum(1 for m in box if not m.get("read")), "latest": next((m for m in box if not m.get("read")), None)})
+    return J(box[:150])
+
+
+@app.post("/api/inbox/read")
+def api_inbox_read(body: dict = Body(default={})):
+    st = store.load()
+    ids = set(body.get("ids") or [])
+    for m in st.get("inbox", []):
+        if body.get("all") or m["id"] in ids:
+            m["read"] = True
+    if body.get("delete"):
+        st["inbox"] = [m for m in st.get("inbox", []) if m["id"] not in set(body["delete"])]
+    store.save(st)
+    return J({"ok": True})
+
+
+@app.post("/api/desk/settings")
+def api_desk_settings(body: dict = Body(...)):
+    st = store.load()
+    st["profile"]["notifyEmail"] = bool(body.get("notifyEmail"))
+    store.save(st)
+    return J({"ok": True})
+
+
+@app.post("/api/desk/run")
+def api_desk_run(body: dict = Body(...)):
+    job = body.get("job")
+    if job not in desk.SCHEDULE:
+        raise HTTPException(400, "Unknown job")
+    if not (config.PRIVATE or _is_admin()):
+        raise HTTPException(403, "Jobs run automatically at 09:01 and 20:01 IST.")
+    return J({"started": desk.run_job(job), "status": desk.status()})
 
 
 # ---------------------------------------------------------------- AI

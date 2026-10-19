@@ -211,6 +211,17 @@ window.CX = (() => {
     if (changed) { await api("/api/state", { body: { alerts: C.state.alerts } }); alertCount(); }
   }
   setInterval(checkAlerts, 60000);
+  // Daily Desk inbox: unread badge + a desktop notification when a new update lands
+  let lastUnread = null;
+  async function checkInbox() {
+    const r = await api("/api/inbox?unread=1").catch(() => null);
+    if (!r) return;
+    $("#inboxN").textContent = r.unread;
+    $("#inboxBtn").classList.toggle("primary", r.unread > 0);
+    if (lastUnread !== null && r.unread > lastUnread && r.latest) UX.notify("📬 " + r.latest.title, "Open the Daily Desk to read it.");
+    lastUnread = r.unread;
+  }
+  checkInbox(); setInterval(checkInbox, 60000);
   TS.on(async (m) => { if (m.type === "alerts") { const st = await api("/api/state"); C.state.alerts = st.alerts; C.state.notes = st.notes; alertCount(); } });
   function openAlerts() {
     const al = C.state.alerts || [];
@@ -236,7 +247,7 @@ window.CX = (() => {
   $("#alertBtn").onclick = openAlerts;
 
   // ---------------------------------------------------------------- tools
-  const TOOLS = { chain: "⛓ Supply chain", size: "📐 Position size", compound: "📈 Compound & SIP", goal: "🎯 Goal planner", fx: "💱 Currency converter", compare: "⚖️ Compare", backtest: "🧪 Backtest", backup: "💾 Backup", glossary: "📖 Glossary", keys: "⌨ Shortcuts" };
+  const TOOLS = { desk: "📬 Daily Desk", chain: "⛓ Supply chain", size: "📐 Position size", compound: "📈 Compound & SIP", goal: "🎯 Goal planner", fx: "💱 Currency converter", compare: "⚖️ Compare", backtest: "🧪 Backtest", backup: "💾 Backup", glossary: "📖 Glossary", keys: "⌨ Shortcuts" };
   function openTools(which = "size") {
     const body = UX.modal("🧰 Tools", `<div class="tabs" id="tTabs" style="margin-bottom:12px;flex-wrap:wrap">${Object.entries(TOOLS).map(([k, v]) => `<button data-tool="${k}" class="${k === which ? "on" : ""}">${v}</button>`).join("")}</div><div id="tBody"></div>`, true);
     body.querySelectorAll("[data-tool]").forEach((b) => (b.onclick = () => openTools(b.dataset.tool)));
@@ -244,6 +255,7 @@ window.CX = (() => {
     const prof = C.state.profile;
     const f = (id, label, val, step = "any") => `<div class="field"><label>${label}</label><input class="in num" id="${id}" type="number" step="${step}" value="${val}"></div>`;
     if (which === "glossary") return UX.showGlossary();
+    if (which === "desk") { window.open("/desk.html", "_blank"); document.getElementById("ux-modal").classList.remove("show"); return; }
     if (which === "chain") {
       const cur = document.querySelector("#rows tr.row.sel")?.dataset.s || C.state.watchlist?.[0] || "AAPL";
       tb.innerHTML = `<div class="hint" style="margin-bottom:10px">See any company's full supply chain: its suppliers, their suppliers, its customers and their customers, plus who else depends on the same suppliers. Live prices are shown on every company.</div>

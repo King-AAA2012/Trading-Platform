@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Desk · CasuallyHedge</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23f5b942'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none'/></svg>">
+<link rel="stylesheet" href="/css/app.css?v=8">
+<style>
+  body { overflow: auto; }
+  .wrap { max-width: 1380px; margin: 0 auto; padding: 14px 18px 40px; }
+  .jobs { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; margin-bottom: 12px; align-items: stretch; }
+  .job { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .job h4 { margin: 0 0 4px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .job .meta { font-size: 12px; color: var(--muted); }
+  .tabsbar { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+  .tabsbar button { background: none; border: 0; padding: 9px 13px; color: var(--muted); cursor: pointer; font-weight: 600; font-size: 13px; border-bottom: 2px solid transparent; }
+  .tabsbar button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tabsbar .n { background: var(--down); color: #fff; border-radius: 999px; font-size: 10.5px; padding: 0 6px; margin-left: 4px; }
+  .msg { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
+  .msg > .hd { display: flex; gap: 10px; align-items: center; padding: 10px 14px; cursor: pointer; }
+  .msg.unread > .hd b { color: var(--text); } .msg.unread > .hd::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+  .msg > .bd { display: none; padding: 4px 16px 14px; border-top: 1px solid var(--line); }
+  .msg.open > .bd { display: block; }
+  .bd table { width: auto; margin: 6px 0 10px; } .bd td, .bd th { padding: 4px 10px; font-size: 12.5px; border-bottom: 1px solid var(--line); text-align: right; font-family: var(--mono); }
+  .bd td:first-child, .bd th:first-child { text-align: left; font-family: var(--sans); }
+  .card2 { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .card2 h3 { margin: 0 0 6px; font-size: 15px; display: flex; gap: 8px; align-items: baseline; }
+  .tbl-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 70vh; }
+  tr.tracked td { background: var(--accent-bg); }
+  .dial { display: inline-flex; gap: 4px; align-items: center; font-family: var(--mono); font-size: 12px; background: var(--panel2); border: 1px solid var(--line2); border-radius: 6px; padding: 1px 6px; margin: 2px 4px 2px 0; cursor: pointer; }
+  .dial:hover { border-color: var(--accent); }
+  .filters2 { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .ev { display: grid; grid-template-columns: 110px 90px 1fr; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; align-items: center; }
+  @media (max-width: 900px) { .jobs { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top" style="height:52px">
+  <a class="brand" href="/app" style="color:var(--text)"><div class="logo" style="background:conic-gradient(from 30deg,#f5b942,var(--accent),var(--up),#f5b942)">📬</div>CasuallyHedge <small>Daily Desk</small></a>
+  <span class="spacer"></span><span class="muted" style="font-size:12px" id="clock"></span>
+  <a class="btn sm" href="/app">← Back to the app</a>
+</header>
+<div class="wrap">
+  <div class="jobs" id="jobs"><div class="empty"><span class="spin"></span></div></div>
+  <div class="tabsbar" id="tabs">
+    <button data-t="inbox" class="on">📬 Inbox <span class="n" id="nUnread" style="display:none"></span></button>
+    <button data-t="roll">⛽ Futures roll cost</button><button data-t="results">📊 Results</button><button data-t="concalls">📞 Concalls & transcripts</button>
+    <button data-t="divs">💰 Dividends</button><button data-t="upcoming">📅 Upcoming</button>
+  </div>
+  <div id="body"></div>
+</div>
+<script src="/js/common.js?v=8"></script>
+<script src="/js/ux.js?v=8"></script>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const { api, esc, price, pct, cls } = TS;
+  let D = null, box = [], tab = location.hash.slice(1) || "inbox", rollF = "tracked", rollQ = "", rollSort = ["symbol", 1];
+  const fmtT = (t) => t ? new Date(t * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "–";
+  const fmtD = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" }) : "–";
+  const ist = () => new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
+  setInterval(() => ($("#clock").textContent = `IST ${ist()}`), 1000);
+
+  // markdown with tables (inbox messages contain tables)
+  function md(src) {
+    const out = [], lines = (src || "").split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\|/.test(lines[i])) {
+        const rows = [];
+        while (i < lines.length && /^\|/.test(lines[i])) { if (!/^\|[\s|:-]+\|$/.test(lines[i])) rows.push(lines[i]); i++; }
+        i--;
+        const cells = (r) => r.replace(/^\||\|$/g, "").split("|").map((c) => TS.md(c.trim()).replace(/^<p>|<\/p>$/g, ""));
+        out.push(`<table>${rows.map((r, k) => `<tr>${cells(r).map((c) => k ? `<td>${c}</td>` : `<th>${c}</th>`).join("")}</tr>`).join("")}</table>`);
+      } else out.push(TS.md(lines[i]));
+    }
+    return out.join("").replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, (m, t, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`);
+  }
+
+  async function load() {
+    [D, box] = await Promise.all([api("/api/desk"), api("/api/inbox")]);
+    renderJobs(); setTab(tab);
+  }
+  function renderJobs() {
+    const card = (k) => {
+      const j = D.status[k], r = j.result || {};
+      const res = k === "roll" ? (r.session ? `Session ${r.session} · ${r.count} contracts` : "") : (r.companies != null ? `${r.companies} companies · ${r.new} new item(s)${r.bootstrap ? " · first run (tracker set up)" : ""}` : "");
+      return `<div class="job"><h4>${k === "roll" ? "⛽" : "📊"} ${esc(j.label)} ${j.running ? '<span class="spin"></span><span class="muted" style="font-weight:400">running…</span>' : ""}</h4>
+        <div class="meta">Runs daily at <b>${j.schedule.join(" & ")}</b> · next ${fmtT(j.next)}</div>
+        <div class="meta">Last run: ${j.last ? `${fmtT(j.last)} · ${j.ok ? '<span class="up">✓ ok</span>' : `<span class="down" data-tip="${esc(j.error || "")}">✗ failed</span>`} · ${j.duration}s` : "not yet"}${res ? " · " + esc(res) : ""}</div>
+        ${D.canRun ? `<button class="btn sm" data-run="${k}" style="margin-top:6px" ${j.running ? "disabled" : ""}>▶ Run now</button>` : ""}</div>`;
+    };
+    $("#jobs").innerHTML = card("roll") + card("calendar") + `<div class="job" style="min-width:230px"><h4>✉️ Email me updates</h4>
+      <label class="check"><input type="checkbox" id="em" ${D.notifyEmail ? "checked" : ""} ${D.emailReady ? "" : "disabled"}> Send each new message by email too</label>
+      <div class="meta" style="margin-top:4px">${D.emailReady ? "Messages always appear in the inbox here." : "Email isn't set up on this server yet (add SMTP or Resend details to .env). Messages appear in the inbox."}</div>
+      <div class="meta" style="margin-top:4px">Tracking <b>${D.tracked.length}</b> symbols from your holdings & watchlists.</div></div>`;
+    document.querySelectorAll("[data-run]").forEach((b) => (b.onclick = async () => { b.disabled = true; b.innerHTML = '<span class="spin"></span> Running'; await api("/api/desk/run", { body: { job: b.dataset.run } }).catch((e) => TS.toast(e.message)); poll(); }));
+    const em = $("#em"); if (em) em.onchange = () => api("/api/desk/settings", { body: { notifyEmail: em.checked } }).then(() => TS.toast(em.checked ? "Email updates on" : "Email updates off"));
+    const n = box.filter((m) => !m.read).length;
+    $("#nUnread").style.display = n ? "" : "none"; $("#nUnread").textContent = n;
+  }
+  let pollT;
+  function poll() { clearTimeout(pollT); pollT = setTimeout(async () => { const prev = JSON.stringify(D.status); D = await api("/api/desk"); if (JSON.stringify(D.status) !== prev) { box = await api("/api/inbox"); renderJobs(); setTab(tab); } if (Object.values(D.status).some((j) => j.running || !j.last)) poll(); }, 4000); }
+
+  function setTab(t) {
+    tab = t; history.replaceState(null, "", "#" + t);
+    document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
+    ({ inbox, roll, results, concalls, divs, upcoming })[t]();
+  }
+  document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => setTab(b.dataset.t)));
+  const comps = () => Object.entries(D.companies);
+  const empty = (msg) => `<div class="empty">${msg}</div>`;
+
+  // ---- inbox
+  function inbox() {
+    $("#body").innerHTML = `<div class="filters2"><span class="muted" style="font-size:12.5px">You get a message only when something new appears for a company you hold or watch, plus the morning roll-cost update.</span><span class="spacer"></span>
+      ${box.some((m) => !m.read) ? '<button class="btn sm" id="allRead">✓ Mark all read</button>' : ""}</div>` +
+      (box.map((m) => `<div class="msg ${m.read ? "" : "unread"}" data-id="${m.id}"><div class="hd"><span>${m.job === "roll" ? "⛽" : "📊"}</span><b style="flex:1">${esc(m.title)}</b><span class="dim" style="font-size:12px">${fmtT(m.t)}</span></div>
+        <div class="bd md">${md(m.body)}${(m.items || []).length ? `<div class="chips" style="margin-top:6px">${[...new Set(m.items.map((i) => i.symbol))].slice(0, 20).map((s) => `<a class="chip" href="/research.html?symbol=${encodeURIComponent(s)}" target="_blank">${esc(s)}</a>`).join("")}</div>` : ""}</div></div>`).join("")
+       || empty("No messages yet. The first run sets up your trackers, then you'll hear about anything new at 09:01 and 20:01 IST."));
+    document.querySelectorAll(".msg .hd").forEach((h) => (h.onclick = () => {
+      const m = h.parentNode; m.classList.toggle("open");
+      if (m.classList.contains("unread")) { m.classList.remove("unread"); const it = box.find((x) => x.id === m.dataset.id); if (it) it.read = true; api("/api/inbox/read", { body: { ids: [m.dataset.id] } }); renderJobs(); }
+    }));
+    const first = document.querySelector(".msg.unread"); if (first) first.classList.add("open");
+    if ($("#allRead")) $("#allRead").onclick = async () => { await api("/api/inbox/read", { body: { all: true } }); box.forEach((m) => (m.read = true)); renderJobs(); inbox(); };
+  }
+
+  // ---- roll cost
+  function roll() {
+    const R = D.roll;
+    if (!R.session) { $("#body").innerHTML = empty("The first roll-cost run hasn't happened yet. It runs at 09:01 IST" + (D.canRun ? ", or press ▶ Run now above." : ".")); return; }
+    let rows = R.rows.filter((r) => (rollF === "all" || (rollF === "tracked" ? r.tracked : rollF === "index" ? r.kind === "Index" : r.rollPts < 0)) && (!rollQ || r.symbol.includes(rollQ.toUpperCase())));
+    if (rollF === "tracked" && !rows.length) rows = R.rows.filter((r) => r.kind === "Index");
+    const [k, dir] = rollSort, val = (r) => k.includes(".") ? k.split(".").reduce((o, p) => o && o[p], r) : r[k];
+    rows.sort((a, b) => { const x = val(a), y = val(b); return (typeof x === "string" ? x.localeCompare(y) : (x ?? -1e9) - (y ?? -1e9)) * dir; });
+    const th = (key, label, tip) => `<th data-k="${key}" class="${key === "symbol" ? "" : "r"}" ${tip ? `data-tip="${esc(tip)}"` : ""}>${label}${rollSort[0] === key ? (rollSort[1] > 0 ? " ▲" : " ▼") : ""}</th>`;
+    $("#body").innerHTML = `<div class="hint" style="margin-bottom:10px">Prices are the <b>${fmtD(R.session)}</b> session close from NSE's official F&O bhavcopy, refreshed at 09:01 IST before the 09:15 open.
+        <b>Roll cost</b> = next-month future − near-month future: what it costs to roll a long position forward (a negative roll pays you, often ahead of a dividend). <b>Rollover %</b> = share of open interest already in the next month.</div>
+      <div class="filters2"><div class="seg" id="rf">${[["tracked", "My stocks"], ["all", "All F&O"], ["index", "Indices"], ["neg", "Negative rolls"]].map(([v, l]) => `<button data-v="${v}" class="${rollF === v ? "on" : ""}">${l}</button>`).join("")}</div>
+        <input class="in" id="rq" placeholder="Search symbol…" style="width:180px" value="${esc(rollQ)}"><span class="dim" style="font-size:12px">${rows.length} contracts${rollF === "tracked" && !R.rows.some((r) => r.tracked) ? " · none of your stocks are in F&O, showing indices" : ""}</span></div>
+      <div class="tbl-wrap"><table class="t"><thead><tr>${th("symbol", "Symbol")}${th("spot", "Spot")}${th("near.close", "Near fut", "Near-month future close")}${th("next.close", "Next fut", "Next-month future close")}
+        ${th("rollPts", "Roll pts")}${th("rollPct", "Roll %")}${th("rollAnn", "Annualised", "Roll % scaled to a year using the days between expiries")}${th("lot", "Lot")}${th("rollPerLot", "Roll ₹/lot")}
+        ${th("carryAnn", "Carry p.a.", "Near future vs spot, annualised (cost of carry)")}${th("rollover", "Rollover %")}<th>Rollover trend</th>${th("daysNear", "Days left", "Days to near-month expiry")}</tr></thead><tbody>
+        ${rows.map((r) => `<tr class="${r.tracked ? "tracked" : ""}"><td><b>${esc(r.symbol)}</b> <span class="dim" style="font-size:11px">${r.kind === "Index" ? "index" : ""}</span></td><td class="r num">${price(r.spot)}</td>
+          <td class="r num">${price(r.near.close)}<div class="dim" style="font-size:10px">${fmtD(r.near.expiry)}</div></td><td class="r num">${price(r.next.close)}<div class="dim" style="font-size:10px">${fmtD(r.next.expiry)}</div></td>
+          <td class="r num ${cls(r.rollPts)}">${r.rollPts > 0 ? "+" : ""}${price(r.rollPts)}</td><td class="r num ${cls(r.rollPct)}">${pct(r.rollPct, 2)}</td><td class="r num ${cls(r.rollAnn)}"><b>${pct(r.rollAnn, 1)}</b></td>
+          <td class="r num">${r.lot.toLocaleString()}</td><td class="r num ${cls(r.rollPerLot)}">₹${Math.round(r.rollPerLot).toLocaleString()}</td><td class="r num ${cls(r.carryAnn)}">${r.carryAnn == null ? "–" : pct(r.carryAnn, 1)}</td>
+          <td class="r num">${r.rollover == null ? "–" : r.rollover.toFixed(1) + "%"}</td><td>${(r.rolloverTrend || []).length > 1 ? TS.spark(r.rolloverTrend, 70, 20) : ""}</td><td class="r num">${r.daysNear}</td></tr>`).join("")}</tbody></table></div>`;
+    document.querySelectorAll("#rf button").forEach((b) => (b.onclick = () => { rollF = b.dataset.v; roll(); }));
+    $("#rq").oninput = (e) => { rollQ = e.target.value; const pos = e.target.selectionStart; roll(); const q = $("#rq"); q.focus(); q.setSelectionRange(pos, pos); };
+    document.querySelectorAll("th[data-k]").forEach((h) => (h.onclick = () => { rollSort = [h.dataset.k, rollSort[0] === h.dataset.k ? -rollSort[1] : (h.dataset.k === "symbol" ? 1 : -1)]; roll(); }));
+  }
+
+  // ---- results
+  function results() {
+    const list = comps().filter(([, c]) => (c.results || []).length).sort((a, b) => (b[1].results[0].date || "").localeCompare(a[1].results[0].date || ""));
+    $("#body").innerHTML = list.map(([s, c]) => `<div class="card2"><h3><a href="/research.html?symbol=${encodeURIComponent(s)}" target="_blank">${esc(s)}</a> <span class="muted" style="font-size:13px;font-weight:400">${esc(c.name || "")} · ${esc(c.market || "")}</span></h3>
+        ${c.results.slice(0, 3).map((r, i) => `<div style="padding:6px 0;${i ? "border-top:1px dashed var(--line)" : ""}"><b>${fmtD(r.date)}</b>${r.period ? ` · period ended ${esc(r.period)}` : ""}${r.ai ? ' · <span class="warn" style="font-size:11px">AI summary, verify in the filing</span>' : ""}
+          ${(r.links || (r.link ? [r.link] : [])).map((l, k) => ` · <a href="${esc(l)}" target="_blank" rel="noopener noreferrer">filing${k ? " " + (k + 1) : ""}</a>`).join("")}<div class="md" style="font-size:13px">${md(r.summary)}</div></div>`).join("")}</div>`).join("")
+      || empty("No results recorded yet for your tracked companies.");
+  }
+
+  // ---- concalls & transcripts
+  function concalls() {
+    const up = [], held = [];
+    comps().forEach(([s, c]) => (c.concalls || []).forEach((x) => (x.status === "upcoming" ? up : held).push({ s, c, x })));
+    up.sort((a, b) => (a.x.date || "").localeCompare(b.x.date || "")); held.sort((a, b) => (b.x.date || b.x.announced || "").localeCompare(a.x.date || a.x.announced || ""));
+    const tr = []; comps().forEach(([s, c]) => (c.transcripts || []).forEach((t) => tr.push({ s, c, t }))); tr.sort((a, b) => b.t.date.localeCompare(a.t.date));
+    const dials = (x) => (x.dialIn || []).map((d) => `<span class="dial" data-copy="${esc(d)}" data-tip="Click to copy">📞 ${esc(d)}</span>`).join("") || `<span class="dim">${esc(x.note || "See notice / company website")}</span>`;
+    $("#body").innerHTML = `<h4 class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px">Upcoming concalls</h4>
+      <div class="tbl-wrap" style="margin-bottom:14px"><table class="t"><thead><tr><th>Date & time</th><th>Company</th><th>Dial-in</th><th>Passcode</th><th>Links</th></tr></thead><tbody>
+      ${up.map(({ s, c, x }) => `<tr><td><b>${fmtD(x.date)}</b><div class="dim">${esc(x.time || (x.notice ? "time in notice" : "time TBA (see IR site)"))}</div></td><td><b>${esc(s)}</b><div class="dim" style="font-size:11px">${esc(c.name || "")}</div></td><td style="white-space:normal">${dials(x)}</td>
+        <td class="num">${esc(x.passcode || "–")}</td><td>${x.notice ? `<a href="${esc(x.notice)}" target="_blank" rel="noopener noreferrer">notice</a>` : ""}${(x.links || []).map((l) => ` · <a href="${esc(l)}" target="_blank" rel="noopener noreferrer">register / webcast</a>`).join("")}</td></tr>`).join("")
+      || '<tr><td colspan="5" class="empty">No upcoming concalls announced for your companies.</td></tr>'}</tbody></table></div>
+      <h4 class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px">Concall & transcript tracker</h4>
+      <div class="tbl-wrap" style="margin-bottom:14px"><table class="t"><thead><tr><th>Date</th><th>Company</th><th>Transcript</th><th>Recording</th><th>Notice</th></tr></thead><tbody>
+      ${held.slice(0, 80).map(({ s, c, x }) => `<tr><td>${fmtD(x.date || x.announced)}</td><td><b>${esc(s)}</b> <span class="dim" style="font-size:11px">${esc(c.name || "")}</span></td>
+        <td>${x.transcript ? `<a href="${esc(x.transcript)}" target="_blank" rel="noopener noreferrer">📝 transcript</a>` : `<span class="dim">${c.transcriptNote && !x.notice ? "needs data key" : "awaiting"}</span>`}</td>
+        <td>${x.recording ? `<a href="${esc(x.recording)}" target="_blank" rel="noopener noreferrer">🎧 recording</a>` : '<span class="dim">–</span>'}</td><td>${x.notice ? `<a href="${esc(x.notice)}" target="_blank" rel="noopener noreferrer">notice</a>` : '<span class="dim">–</span>'}</td></tr>`).join("")
+      || '<tr><td colspan="5" class="empty">No past concalls recorded yet.</td></tr>'}</tbody></table></div>
+      <h4 class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px">Latest transcripts</h4>
+      ${tr.slice(0, 20).map(({ s, c, t }) => `<div class="card2"><h3>${esc(s)} <span class="muted" style="font-size:13px;font-weight:400">${esc(c.name || "")} · ${fmtD(t.date)}</span> <a href="${esc(t.link)}" target="_blank" rel="noopener noreferrer" style="font-size:12px">open PDF</a></h3>
+        ${t.summary ? `<div class="md" style="font-size:13px">${md(t.summary)}</div><div class="warn" style="font-size:11px">AI summary from the transcript; check the PDF for exact wording.</div>` : '<div class="dim" style="font-size:12px">Summary is written for transcripts posted after your tracker was set up.</div>'}</div>`).join("") || empty("No transcripts yet.")}`;
+    document.querySelectorAll("[data-copy]").forEach((el) => (el.onclick = () => UX.copy(el.dataset.copy, "Dial-in copied")));
+  }
+
+  // ---- dividends
+  function divs() {
+    const all = []; comps().forEach(([s, c]) => (c.dividends || []).forEach((d) => all.push({ s, c, d })));
+    all.sort((a, b) => (b.d.exDate || b.d.declared || "").localeCompare(a.d.exDate || a.d.declared || ""));
+    const today = new Date().toISOString().slice(0, 10);
+    $("#body").innerHTML = `<div class="tbl-wrap"><table class="t"><thead><tr><th>Company</th><th>Dividend</th><th class="r">Amount</th><th>Ex-date</th><th>Record date</th><th>Declared</th><th>Source</th></tr></thead><tbody>
+      ${all.map(({ s, c, d }) => `<tr class="${d.exDate && d.exDate >= today ? "tracked" : ""}"><td><b>${esc(s)}</b><div class="dim" style="font-size:11px">${esc(c.name || "")}</div></td><td style="white-space:normal;max-width:420px">${esc(d.subject || "")}</td>
+        <td class="r num">${d.amount ?? "–"}</td><td>${d.exDate ? fmtD(d.exDate) + (d.exDate >= today ? ' <span class="pill" style="font-size:10px;padding:0 5px">upcoming</span>' : "") : "–"}</td><td>${esc(d.recordDate || "–")}</td>
+        <td>${d.declared ? fmtD(d.declared) : "–"}</td><td class="dim">${esc(d.source || "")}${d.link ? ` · <a href="${esc(d.link)}" target="_blank" rel="noopener noreferrer">filing</a>` : ""}</td></tr>`).join("")
+      || '<tr><td colspan="7" class="empty">No dividends recorded yet.</td></tr>'}</tbody></table></div>`;
+  }
+
+  // ---- upcoming
+  function upcoming() {
+    const ev = [], today = new Date().toISOString().slice(0, 10);
+    comps().forEach(([s, c]) => {
+      (c.events || []).forEach((e) => ev.push({ date: e.date, kind: e.purpose.includes("ividend") && !e.purpose.includes("Result") ? "💰" : "📊", s, name: c.name, what: e.purpose, desc: e.desc }));
+      (c.concalls || []).filter((x) => x.status === "upcoming" && x.notice).forEach((x) => ev.push({ date: x.date, kind: "📞", s, name: c.name, what: `Concall ${x.time || ""}`, desc: (x.dialIn || []).join(", ") }));
+      (c.dividends || []).filter((d) => d.exDate && d.exDate >= today).forEach((d) => ev.push({ date: d.exDate, kind: "💰", s, name: c.name, what: "Ex-dividend", desc: d.subject }));
+    });
+    const seen = new Set(), list = ev.filter((e) => e.date && e.date >= today && !seen.has(e.date + e.s + e.what) && seen.add(e.date + e.s + e.what)).sort((a, b) => a.date.localeCompare(b.date));
+    $("#body").innerHTML = `<div class="tbl-wrap">${list.map((e) => `<div class="ev"><b>${fmtD(e.date)}</b><span>${e.kind} <a href="/research.html?symbol=${encodeURIComponent(e.s)}" target="_blank">${esc(e.s)}</a></span><span><b>${esc(e.what)}</b> <span class="dim">${esc(e.name || "")}</span>${e.desc ? `<div class="dim" style="font-size:12px">${esc(e.desc)}</div>` : ""}</span></div>`).join("")
+      || empty("Nothing scheduled yet for your companies.")}</div>`;
+  }
+
+  // keep refreshing while a job is running or the very first runs haven't finished yet
+  load().then(() => { if (Object.values(D.status).some((j) => j.running || !j.last)) poll(); });
+  setInterval(async () => { const r = await api("/api/inbox?unread=1").catch(() => null); if (r && r.unread !== box.filter((m) => !m.read).length) { box = await api("/api/inbox"); D = await api("/api/desk"); renderJobs(); if (tab === "inbox") inbox(); } }, 60000);
+})();
+</script>
+</body>
+</html>
