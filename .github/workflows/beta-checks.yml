@@ -1,0 +1,44 @@
+name: Beta checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Smoke test (${{ matrix.db }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: casuallyhedge
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Start CasuallyHedge (beta mode)
+        env:
+          CH_JOBS: "0"
+          DATABASE_URL: ${{ matrix.db == 'postgres' && 'postgresql://postgres:ci@localhost:5432/casuallyhedge' || '' }}
+        run: |
+          nohup python -m uvicorn backend.app:app --host 127.0.0.1 --port 8420 > server.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:8420/api/config > /dev/null && break; sleep 1; done
+      - name: Sign-up, login, private data, beta mode
+        run: python scripts/smoke_test.py http://127.0.0.1:8420
+      - name: Server log
+        if: failure()
+        run: cat server.log

@@ -72,7 +72,7 @@
   function renderStatus(a) {
     const d = (t) => new Date(t * 1000).toLocaleDateString();
     const map = { trial: [`Free trial · ${a.trialDaysLeft} day${a.trialDaysLeft === 1 ? "" : "s"} left`, `Trial ends ${d(a.trialEnd)}`, "warn"], paid: [`${(a.plan || "").replace(/^./, (c) => c.toUpperCase())} plan · active`, `Paid through ${d(a.paidUntil)}`, "up"],
-      comp: ["Complimentary access", "Free forever", "up"], expired: ["Trial ended", "Choose a plan to continue", "down"] };
+      comp: ["Complimentary access", "Free forever", "up"], beta: ["Public beta · free", "Everything is free while CasuallyHedge is in beta", "up"], expired: ["Trial ended", "Choose a plan to continue", "down"] };
     const [t, s, c] = map[a.state];
     $("#status").textContent = t; $("#status").className = "status " + c; $("#statusSub").textContent = s;
   }

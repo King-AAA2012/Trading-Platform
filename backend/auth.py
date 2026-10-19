@@ -78,6 +78,8 @@ def access(u: dict) -> dict:
     now = time.time()
     if u["email"].lower() in config.COMP_EMAILS:
         return {"active": True, "state": "comp", "trialDaysLeft": None, "paidUntil": None}
+    if config.BETA and not (u.get("paid_until") or 0) > now:          # free for everyone during the public beta
+        return {"active": True, "state": "beta", "trialDaysLeft": None, "paidUntil": None}
     if (u.get("paid_until") or 0) > now:
         return {"active": True, "state": "paid", "plan": u.get("plan"), "paidUntil": u["paid_until"], "daysLeft": int((u["paid_until"] - now) // 86400)}
     if u["trial_end"] > now:

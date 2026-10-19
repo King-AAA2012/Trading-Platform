@@ -1,0 +1,30 @@
+# Render Blueprint: Render Dashboard -> New -> Blueprint -> pick this repo (or use the "Deploy to Render" button in the README).
+# Free plan: HTTPS on a free casuallyhedge.onrender.com address, redeploys on every push to main. The app sleeps after
+# 15 minutes without visitors and its disk is wiped on restart, so give it a free Postgres (DATABASE_URL, e.g. Neon) to keep
+# accounts. Fill in the blank values when Render asks; email settings can be added later under Environment.
+services:
+  - type: web
+    name: casuallyhedge
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn backend.app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    healthCheckPath: /api/config
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: CH_BETA
+        value: "1"
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: FILING_SOURCES
+        value: sec,hkex
+      - key: DATABASE_URL
+        sync: false
+      - key: SITE_URL
+        sync: false
+      - key: COMPANY_EMAIL
+        sync: false
+      - key: COMP_EMAILS
+        sync: false

@@ -1,11 +1,42 @@
 # CasuallyHedge: Trading, for the little guy.
 
+![Status: public beta](https://img.shields.io/badge/status-public%20beta-f5b942) [![Beta checks](https://github.com/King-AAA2012/Trading-Platform/actions/workflows/beta-checks.yml/badge.svg)](https://github.com/King-AAA2012/Trading-Platform/actions/workflows/beta-checks.yml)
+
 A market research platform for beginners and pros, run locally or as a subscription website. It scans **every major stock market in the world** plus crypto,
 FX, commodities, bonds and ETFs, rates every instrument with its own multi-factor algorithm, tells you **what to buy,
 short or avoid, and exactly how much** for your budget, builds a **multi-market daily portfolio plan**, answers
 **"what if…?" scenarios**, and explains everything with a **local AI** that never sends your data anywhere.
 
 > **Research only.** CasuallyHedge has no broker connection and cannot place trades. Nothing here is financial advice.
+
+## Public beta 🧪
+
+CasuallyHedge is in **public beta**: free for everyone while we test (no payment is taken), with a **BETA** tag on every
+page and a beta notice on the first visit. It may have bugs, and saved data may occasionally be reset. Report problems to
+the support email shown in the app. Set `CH_BETA=0` when you're ready to start charging.
+
+Every push to `main` runs the **Beta checks** on GitHub Actions. They start the app and run a sign-up / login /
+private-data smoke test on both SQLite and Postgres (`scripts/smoke_test.py`).
+
+### Put the beta online for free (Render)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/King-AAA2012/Trading-Platform)
+
+1. **Free database (keeps accounts):** sign up at [neon.tech](https://neon.tech) with GitHub, create a project, and copy its
+   connection string (`postgresql://…?sslmode=require`).
+2. **Free hosting and address:** press **Deploy to Render** above (sign in with GitHub). Render reads `render.yaml`. When it
+   asks, paste the connection string into `DATABASE_URL`, set `SITE_URL` to `https://casuallyhedge.onrender.com` (or
+   whatever address Render gives you), `COMPANY_EMAIL` to your support address, and `COMP_EMAILS` to your own email.
+   You get HTTPS on a free `*.onrender.com` address, and it redeploys on every push to `main`.
+3. **Optional, keep it awake:** free Render apps sleep after 15 minutes without visitors, which pauses the scheduled Daily
+   Desk jobs until someone visits. A free [UptimeRobot](https://uptimerobot.com) monitor on `https://<your-app>.onrender.com/api/config`
+   every 5 minutes keeps it awake (one always-on free app fits Render's 750 free hours a month).
+4. **Optional:** add `SMTP_*` or `RESEND_API_KEY` under Environment for emails. A custom domain (about $10 a year, e.g.
+   from Cloudflare or Namecheap) can be attached on Render's free plan too.
+
+What's different online: the local AI (Ollama) isn't available on free hosting, so AI answers fall back to rule-based
+summaries. Some exchanges (notably NSE) block cloud servers, so India filings and the NSE roll cost may be missing on the
+hosted beta. Everything also runs from the `Dockerfile` on any container host.
 
 
 ## Private mode (just for you)

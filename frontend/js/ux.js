@@ -176,6 +176,11 @@ const UX = (() => {
   let cfg;
   try { cfg = await fetch("/api/config").then((r) => r.json()); } catch { return; }
   const KEY = "ch-beta-ack";
+  if (cfg.beta && !cfg.private && !document.querySelector(".beta-tag, .nav .beta")) {          // BETA tag next to the logo on every page
+    const b = document.querySelector(".brand");
+    if (b) b.insertAdjacentHTML("beforeend", ` <span class="beta-tag" title="Public beta: free to use while we test. It may have bugs, and saved data may occasionally be reset."
+      style="font-size:10px;font-weight:700;letter-spacing:.6px;padding:1px 7px;border-radius:999px;background:rgba(245,185,66,.15);color:var(--warn);border:1px solid rgba(245,185,66,.45);margin-left:6px;vertical-align:middle">BETA</span>`);
+  }
   if (cfg.private) return;                       // your own private copy: no beta/terms pop-up
   try { if (localStorage.getItem(KEY) === cfg.termsVersion) return; } catch {}
   const e = UX.esc, mail = `<a href="mailto:${e(cfg.email)}">${e(cfg.email)}</a>`;
@@ -190,6 +195,7 @@ const UX = (() => {
       <p style="margin:0 0 8px">Before you start, please read this:</p>
       <ul style="margin:0;padding-left:20px">
         <li><b>This is beta software.</b> It may contain bugs, errors or inaccurate information, and features may change.</li>
+        ${cfg.beta ? "<li><b>Free while in beta.</b> No payment is taken during the beta. Saved data may occasionally be reset while we test.</li>" : ""}
         <li><b>Research and education only, not financial advice.</b> Scores, signals, plans and AI answers are automated estimates, not recommendations to buy or sell. We are not a broker and cannot place trades.</li>
         <li><b>You can lose money.</b> All investing carries risk, including the loss of everything you invest.</li>
         <li><b>We take no responsibility for any losses</b> or missed gains from decisions you make using ${e(cfg.appName)}. You are responsible for your own decisions.</li>
