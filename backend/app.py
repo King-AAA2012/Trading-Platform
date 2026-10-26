@@ -14,13 +14,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from . import ai, alerts, auth, billing, config, data, db, desk, engine, extras, intl, markets, optimizer, planner, portfolio, scenario, store, supply_chain
+from . import ai, alerts, auth, billing, config, data, db, desk, engine, extras, intl, markets, terminal, optimizer, planner, portfolio, scenario, store, supply_chain
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONT = ROOT / "frontend"
 app = FastAPI(title=config.APP_NAME, version="3.0", docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(auth.router)
 app.include_router(billing.router)
+app.include_router(terminal.router)              # Pro mode: the terminal's functions (/api/t/...)
 
 
 @app.on_event("startup")
@@ -292,7 +293,7 @@ def api_state():
 @app.post("/api/state")
 def api_state_save(patch: dict = Body(...)):
     st = store.load()
-    for k in ("profile", "holdings", "watchlist", "lastMarket", "planMarkets", "watchlists", "alerts", "journal", "notes", "screens"):
+    for k in ("profile", "holdings", "watchlist", "lastMarket", "planMarkets", "watchlists", "alerts", "journal", "notes", "screens", "terminal"):
         if k in patch:
             st[k] = patch[k]
     store.save(st)

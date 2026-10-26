@@ -131,13 +131,18 @@ const TS = (() => {
     clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms);
   }
 
-  // beginner / pro mode shared across windows
-  function mode() { try { return localStorage.getItem("ts-mode") || "beginner"; } catch { return "beginner"; } }
+  // three modes shared across windows: Simple (plain English), Advanced (every number), Pro (the terminal)
+  const MODES = ["simple", "advanced", "terminal"];
+  const normMode = (m) => (m === "beginner" ? "simple" : m === "pro" ? "advanced" : MODES.includes(m) ? m : "simple");   // older saved names
+  function mode() { try { return normMode(localStorage.getItem("ts-mode")); } catch { return "simple"; } }
   function setMode(m, broadcast = true) {
+    m = normMode(m);
     try { localStorage.setItem("ts-mode", m); } catch {}
-    document.body.classList.toggle("pro", m === "pro");
+    document.body.classList.toggle("pro", m !== "simple");          // Advanced and Pro show every number
+    document.body.classList.toggle("term", m === "terminal");       // Pro adds the terminal workspace
     document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
     if (broadcast) bus.postMessage({ type: "mode", mode: m });
+    window.dispatchEvent(new CustomEvent("ts-mode", { detail: m }));
   }
   listeners.push((m) => m.type === "mode" && setMode(m.mode, false));
 

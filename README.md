@@ -285,6 +285,46 @@ opens.
 **AI assistant**
 - Floating ✨ chat on the Command screen with your plan as context.
 
+## Three modes: Simple, Advanced and Pro (the CasuallyHedge Terminal) 🖥️
+
+The switch in the header picks how much you see:
+
+- **Simple:** plain-English explanations and the essentials.
+- **Advanced:** every number, indicator and setting (what used to be called Pro).
+- **Pro:** the **CasuallyHedge Terminal**, a Bloomberg-style Launchpad of linked panels driven by function codes, built
+  only from free public data.
+
+**Using the terminal**
+
+- **Command line:** type a ticker and/or a function and press Enter (Bloomberg's `<GO>`), for example `AAPL GP`,
+  `NVDA DES`, `RELIANCE IN FA`, `700 HK OMON`, `SPX`, `EURUSD`, `WEI`, `SECT`, `ECO`, or `AI why is gold up?`.
+- **Ticker formats:** Bloomberg-style exchange codes are understood (US, IN, JP, HK, LN, GR, FP, CN, AU…), as are index
+  names like SPX, NKY, UKX, SX5E and NIFTY.
+- **Linked panels:** the function opens in the highlighted panel. Panels marked 🔗 follow the loaded security. Click any
+  ticker to load it everywhere; double-click it for full research.
+- **Panel controls:** ⚙ changes a panel's function (saved per page), ⤢ or double-clicking the header maximises it, and
+  `HELP` lists every function.
+- **Keys:** `/` focuses the command line, `Alt+1–9` switches pages, `F8` Equity, `F9` Commodities, `F10` Global markets,
+  `F2`/`F11` FX & rates.
+- **Launchpad pages:** Launchpad, Global Mkt, Sectors, Movers, Equity, Analysis, Options, FX & Rates, Commodities,
+  News & Events and Worksheet.
+
+| Group | Functions |
+|---|---|
+| Markets | `WEI` world indices · `IMAP` intraday market map (by region / by sector) · `MOST` movers, most traded, unusual volume, 52-week highs and lows · `MOV` index movers · `MKT` fear & greed and breadth |
+| Sectors | `SECT` sector performance (1D…YTD, drill into stocks) · `SECG` sector returns day by day (chart) · `SECD` sector heat by day · `RRG` sector rotation map |
+| Security 🔗 | `GP` price chart with signals · `GIP` intraday · `HP` historical prices · `DES` description & key stats · `FA` financial statements & ratios · `RV` comparable valuation · `ANR` analyst recommendations & targets · `EE` earnings estimates & surprises · `HDS` holders & insider trades · `DVD` dividends & splits · `SEAG` seasonality · `BETA` regression · `CN` company news |
+| Options | `OMON` option chain monitor (P/C, max pain, IV) · `SKEW` volatility smile & open-interest profile · `OVH` option volume heat map (US listings) |
+| FX & rates | `FXC` cross-rate matrix · `WCRS` currency ranking · `GC` official US Treasury curve (today vs 1W/1M/1Y, 2s10s) · `WIRP` Fed rate expectations from fed funds futures |
+| Commodities | `CMDTY` commodities monitor with roll cost · `CRYP` crypto monitor · `ROLL` futures roll cost (Daily Desk) |
+| News & events | `N` news by importance with topics · `ECO` economic calendar · `EVTS` corporate events for your companies |
+| Portfolio | `MON` portfolio monitor · `WS` worksheet (your own monitor) · `CORR` correlation matrix |
+| Actions | `RES` research screen · `SPLC` supply chain · `DESK` Daily Desk · `PORT` holdings · `ALRT` alerts · `TOOL` tools · `AI` ask the AI · `HELP` |
+
+**Data sources:** Yahoo (prices, fundamentals, analysts, holders; options for US listings), the US Treasury (official
+yield curve), CME fed funds futures (rate expectations), the ForexFactory weekly calendar (economic events) and Google
+News (headlines). All are free, and all are cached so a full screen of panels stays light.
+
 ## Daily Desk 📬 (scheduled jobs)
 
 CasuallyHedge runs these automatically while the server is running (`start.bat` or `Private Start.bat`). If your PC was

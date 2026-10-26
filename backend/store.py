@@ -23,6 +23,7 @@ DEFAULT = {
     "notes": {},           # {symbol: text}
     "screens": {},         # saved screener filters {name: {...}}
     "inbox": [],           # Daily Desk messages {id, t, job, title, body, items, read}
+    "terminal": {},        # Pro-mode terminal: launchpad pages, panel functions, worksheet, command history
 }
 
 

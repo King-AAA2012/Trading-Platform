@@ -470,7 +470,7 @@ window.CX = (() => {
     if (!C.state) return;
     clearInterval(boot);
     renderLists(); alertCount(); C.renderWatch();
-    if (!ls("ts-tour", 0) && TS.mode() === "beginner") {
+    if (!ls("ts-tour", 0) && TS.mode() === "simple") {
       const start = () => setTimeout(() => tour(0), 600);
       let acked = false; try { acked = !!localStorage.getItem("ch-beta-ack"); } catch {}
       acked ? setTimeout(() => tour(0), 1500) : window.addEventListener("ch-beta-ack", start, { once: true });   // tour starts after the beta notice
