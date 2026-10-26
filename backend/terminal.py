@@ -1,7 +1,8 @@
 """Pro mode: CasuallyHedge's own terminal.
 
-Market-terminal functions (WEI, IMAP, MOST, MOV, sector monitors, RV, DES, FA, ANR, EE, HDS, DVD, OMON, ECO, GC, FXC,
-WCRS, WIRP, commodities, crypto, news, CORR, SEAG, BETA…) built only from free, public data. Every endpoint is cached so a
+Data for the terminal's functions (world indices, market map, movers, sectors, company profile, financials, peers,
+analysts, earnings, owners, dividends, options, currencies, yields, rate path, commodities, crypto, calendar, news,
+correlation, seasons, risk…) built only from free, public data. Every endpoint is cached so a
 full screen of panels refreshing stays light on the sources. Data notes: Yahoo (prices, fundamentals, options
 for US listings), US Treasury (official daily yield curve), CME fed funds futures via Yahoo (rate expectations),
 ForexFactory's weekly calendar feed (economic events), Google News RSS (headlines)."""
@@ -122,8 +123,8 @@ def t_quotes(symbols: str):
     return _ok({"rows": [{**q[s], **{k: (rt.get(s) or {}).get(k) for k in ("1W", "1M", "YTD", "1Y", "spark")}} for s in syms if s in q], "asOf": time.time()})
 
 
-# ================================================================ WEI / IMAP: world equity indices
-WEI = {
+# ================================================================ world stock indices (INDICES, MAP)
+INDICES = {
     "Americas": [("^GSPC", "S&P 500", "United States"), ("^DJI", "Dow Jones", "United States"), ("^IXIC", "Nasdaq Comp", "United States"),
                  ("^RUT", "Russell 2000", "United States"), ("^GSPTSE", "S&P/TSX", "Canada"), ("^BVSP", "Ibovespa", "Brazil"),
                  ("^MXX", "S&P/BMV IPC", "Mexico"), ("^MERV", "Merval", "Argentina")],
@@ -139,12 +140,12 @@ WEI = {
 }
 
 
-@router.get("/wei")
-def t_wei():
-    syms = [s for rows in WEI.values() for s, _, _ in rows]
+@router.get("/indices")
+def t_indices():
+    syms = [s for rows in INDICES.values() for s, _, _ in rows]
     q, rt = rich_quotes(syms), _rets(syms)
     regions = []
-    for reg, rows in WEI.items():
+    for reg, rows in INDICES.items():
         out = []
         for s, nm, country in rows:
             x, r = q.get(s) or {}, rt.get(s) or {}
@@ -230,9 +231,9 @@ def t_sectors(market: str = "us", days: int = 30):
     return _ok(out)
 
 
-# ================================================================ MOST / MOV
-@router.get("/most")
-def t_most(market: str = "us"):
+# ================================================================ market movers and what drove the index
+@router.get("/movers")
+def t_movers(market: str = "us"):
     def load():
         rows, hists = _scan(market)
         caps = {s: x.get("marketCap") for s, x in rich_quotes([r["symbol"] for r in rows]).items()}
@@ -289,7 +290,7 @@ def t_portfolio():
                 "pnl": sum(r["pnlBase"] or 0 for r in rows) if tot else None, "asOf": time.time()})
 
 
-# ================================================================ company: DES / ANR / EE / HDS
+# ================================================================ company: profile, analysts, earnings, owners
 def _raw(o):
     if isinstance(o, dict):
         if "raw" in o and len(o) <= 3:
@@ -302,8 +303,8 @@ def _raw(o):
     return o
 
 
-@router.get("/sec/{symbol:path}")
-def t_sec(symbol: str):
+@router.get("/company/{symbol:path}")
+def t_company(symbol: str):
     mods = ("price,assetProfile,summaryDetail,defaultKeyStatistics,financialData,recommendationTrend,upgradeDowngradeHistory,earningsHistory,"
             "earningsTrend,calendarEvents,institutionOwnership,fundOwnership,majorHoldersBreakdown,insiderTransactions,netSharePurchaseActivity")
 
@@ -326,8 +327,8 @@ def t_sec(symbol: str):
     return _ok(out)
 
 
-# ================================================================ FA: financial statements
-FA_ROWS = [("Revenue", "TotalRevenue"), ("Cost of revenue", "CostOfRevenue"), ("Gross profit", "GrossProfit"), ("R&D", "ResearchAndDevelopment"),
+# ================================================================ financial statements
+STATEMENT_ROWS = [("Revenue", "TotalRevenue"), ("Cost of revenue", "CostOfRevenue"), ("Gross profit", "GrossProfit"), ("R&D", "ResearchAndDevelopment"),
            ("SG&A", "SellingGeneralAndAdministration"), ("Operating income", "OperatingIncome"), ("EBITDA", "EBITDA"), ("Net income", "NetIncome"),
            ("Diluted EPS", "DilutedEPS"), ("Diluted shares", "DilutedAverageShares"), ("Operating cash flow", "OperatingCashFlow"),
            ("Capital expenditure", "CapitalExpenditure"), ("Free cash flow", "FreeCashFlow"), ("Cash & equivalents", "CashAndCashEquivalents"),
@@ -335,14 +336,14 @@ FA_ROWS = [("Revenue", "TotalRevenue"), ("Cost of revenue", "CostOfRevenue"), ("
            ("Shareholders’ equity", "StockholdersEquity")]
 
 
-@router.get("/fa/{symbol:path}")
-def t_fa(symbol: str, period: str = "annual"):
+@router.get("/financials/{symbol:path}")
+def t_financials(symbol: str, period: str = "annual"):
     pre = "quarterly" if period.startswith("q") else "annual"
 
     def load():
         now = int(time.time())
         j = data._yget(f"/ws/fundamentals-timeseries/v1/finance/timeseries/{urlquote(symbol, safe='')}",
-                       {"type": ",".join(pre + k for _, k in FA_ROWS), "period1": now - 8 * 365 * 86400, "period2": now}, crumb=True)
+                       {"type": ",".join(pre + k for _, k in STATEMENT_ROWS), "period1": now - 8 * 365 * 86400, "period2": now}, crumb=True)
         series, dates, ccy = {}, set(), None
         for r in (j or {}).get("timeseries", {}).get("result") or []:
             typ = ((r.get("meta") or {}).get("type") or [""])[0]
@@ -355,7 +356,7 @@ def t_fa(symbol: str, period: str = "annual"):
             return None
         cols = sorted(dates)[-(8 if pre == "quarterly" else 5):]
         val = lambda k, d: series.get(k, {}).get(d)  # noqa: E731
-        rows = [{"label": lbl, "key": k, "values": [val(k, d) for d in cols]} for lbl, k in FA_ROWS if k in series]
+        rows = [{"label": lbl, "key": k, "values": [val(k, d) for d in cols]} for lbl, k in STATEMENT_ROWS if k in series]
 
         def ratio(lbl, num, den, pct=True):
             vs = [(_r(val(num, d) / val(den, d), 4) if val(num, d) is not None and val(den, d) not in (None, 0) else None) for d in cols]
@@ -374,7 +375,7 @@ def t_fa(symbol: str, period: str = "annual"):
     return _ok(out)
 
 
-# ================================================================ RV: comparable valuation
+# ================================================================ peer comparison
 def _keystats(s: str):
     def load():
         j = data._yget(f"/v10/finance/quoteSummary/{urlquote(s, safe='')}", {"modules": "defaultKeyStatistics,financialData,summaryDetail"}, crumb=True)
@@ -390,11 +391,11 @@ def _keystats(s: str):
     return data.cached(f"tks:{s}", 3600, load)
 
 
-RV_METRICS = ["pe", "fpe", "pb", "evEbitda", "evRev", "gm", "om", "nm", "roe", "revG", "divY", "chg52", "beta"]
+PEER_METRICS = ["pe", "fpe", "pb", "evEbitda", "evRev", "gm", "om", "nm", "roe", "revG", "divY", "chg52", "beta"]
 
 
-@router.get("/comps/{symbol:path}")
-def t_comps(symbol: str, peers: str = ""):
+@router.get("/peers/{symbol:path}")
+def t_peers(symbol: str, peers: str = ""):
     def load():
         cand = [p.strip().upper() for p in peers.split(",") if p.strip()]
         if not cand:
@@ -421,10 +422,10 @@ def t_comps(symbol: str, peers: str = ""):
         if not rows:
             return None
         peer_rows = [r for r in rows if r["symbol"] != symbol]
-        med = {m: _r(np.median([r[m] for r in peer_rows if r.get(m) is not None]), 4) if any(r.get(m) is not None for r in peer_rows) else None for m in RV_METRICS}
-        avg = {m: _r(np.mean([r[m] for r in peer_rows if r.get(m) is not None]), 4) if any(r.get(m) is not None for r in peer_rows) else None for m in RV_METRICS}
+        med = {m: _r(np.median([r[m] for r in peer_rows if r.get(m) is not None]), 4) if any(r.get(m) is not None for r in peer_rows) else None for m in PEER_METRICS}
+        avg = {m: _r(np.mean([r[m] for r in peer_rows if r.get(m) is not None]), 4) if any(r.get(m) is not None for r in peer_rows) else None for m in PEER_METRICS}
         subj = next((r for r in rows if r["symbol"] == symbol), {})
-        prem = {m: _r(subj[m] / med[m] - 1, 4) if subj.get(m) is not None and med.get(m) not in (None, 0) else None for m in RV_METRICS}
+        prem = {m: _r(subj[m] / med[m] - 1, 4) if subj.get(m) is not None and med.get(m) not in (None, 0) else None for m in PEER_METRICS}
         return {"symbol": symbol, "rows": rows, "median": med, "mean": avg, "premium": prem, "asOf": time.time()}
     out = data.cached(f"tcomps:{symbol}:{peers}", 1800, load)
     if not out:
@@ -432,7 +433,7 @@ def t_comps(symbol: str, peers: str = ""):
     return _ok(out)
 
 
-# ================================================================ OMON / option volume heat
+# ================================================================ option chain and busiest options
 def _leg(xs):
     return [{"strike": x.get("strike"), "last": x.get("lastPrice"), "bid": x.get("bid"), "ask": x.get("ask"), "chg": _r(x.get("percentChange"), 2),
              "vol": x.get("volume") or 0, "oi": x.get("openInterest") or 0, "iv": _r(x.get("impliedVolatility"), 4), "itm": bool(x.get("inTheMoney")),
@@ -500,14 +501,14 @@ def _opt_summary(s: str):
             "expiry": o.get("expirationDate")}
 
 
-@router.get("/optheat")
-def t_optheat(symbols: str = ""):
+@router.get("/optionheat")
+def t_optionheat(symbols: str = ""):
     syms = [s for s in symbols.split(",") if s and "." not in s and "=" not in s and not s.startswith("^") and "-" not in s] or OPT_DEFAULT
     rows = [r for r in data.POOL.map(lambda s: data.cached(f"toh:{s}", 180, lambda: _opt_summary(s)), syms[:20]) if r]
     return _ok({"rows": sorted(rows, key=lambda r: -(r["totVol"] or 0)), "asOf": time.time()})
 
 
-# ================================================================ FXC / WCRS
+# ================================================================ currencies: grid and strength
 FX_CCYS = ["USD", "EUR", "JPY", "GBP", "CHF", "CAD", "AUD", "NZD", "CNY", "INR", "HKD", "SGD"]
 
 
@@ -526,7 +527,7 @@ def t_fx():
     return _ok({"ccys": ccys, "matrix": matrix, "vsUsd": sorted(vs, key=lambda x: -(x["chg"] or 0)), "strength": strength, "asOf": time.time()})
 
 
-# ================================================================ GC / WIRP: rates
+# ================================================================ rates: Treasury yields and the expected path
 TENORS = [("1 Mo", 1 / 12), ("2 Mo", 2 / 12), ("3 Mo", 0.25), ("4 Mo", 1 / 3), ("6 Mo", 0.5), ("1 Yr", 1), ("2 Yr", 2), ("3 Yr", 3), ("5 Yr", 5),
           ("7 Yr", 7), ("10 Yr", 10), ("20 Yr", 20), ("30 Yr", 30)]
 
@@ -548,8 +549,8 @@ def _treasury(year: int) -> list[dict]:
     return data.cached(f"ust:{year}", 3 * 3600, load) or []
 
 
-@router.get("/curve")
-def t_curve():
+@router.get("/yields")
+def t_yields():
     y = dt.date.today().year
     rows = _treasury(y - 1) + _treasury(y)
     if not rows:
@@ -572,8 +573,8 @@ def t_curve():
                 "source": "US Treasury daily par yield curve (official); live yields from Yahoo", "asOf": time.time()})
 
 
-@router.get("/wirp")
-def t_wirp():
+@router.get("/ratepath")
+def t_ratepath():
     d = dt.date.today()
     syms = []
     for k in range(13):
@@ -591,20 +592,20 @@ def t_wirp():
 
 
 # ================================================================ commodities / crypto / roll
-CMDTY = [("Energy", [("CL=F", "WTI crude", "CL"), ("BZ=F", "Brent crude", "BZ"), ("NG=F", "Natural gas", "NG"), ("HO=F", "Heating oil", "HO"), ("RB=F", "RBOB gasoline", "RB")]),
+COMMODITIES = [("Energy", [("CL=F", "WTI crude", "CL"), ("BZ=F", "Brent crude", "BZ"), ("NG=F", "Natural gas", "NG"), ("HO=F", "Heating oil", "HO"), ("RB=F", "RBOB gasoline", "RB")]),
          ("Metals", [("GC=F", "Gold", "GC"), ("SI=F", "Silver", "SI"), ("HG=F", "Copper", "HG"), ("PL=F", "Platinum", "PL"), ("PA=F", "Palladium", "PA")]),
          ("Grains", [("ZC=F", "Corn", "ZC"), ("ZW=F", "Wheat", "ZW"), ("ZS=F", "Soybeans", "ZS"), ("ZL=F", "Soybean oil", "ZL"), ("ZM=F", "Soybean meal", "ZM")]),
          ("Softs", [("KC=F", "Coffee", "KC"), ("SB=F", "Sugar", "SB"), ("CC=F", "Cocoa", "CC"), ("CT=F", "Cotton", "CT")]),
          ("Livestock", [("LE=F", "Live cattle", "LE"), ("HE=F", "Lean hogs", "HE"), ("GF=F", "Feeder cattle", "GF")])]
 
 
-@router.get("/cmdty")
-def t_cmdty():
-    syms = [s for _, xs in CMDTY for s, _, _ in xs]
+@router.get("/commodities")
+def t_commodities():
+    syms = [s for _, xs in COMMODITIES for s, _, _ in xs]
     q, rt = rich_quotes(syms), _rets(syms)
     groll = {r["id"]: r for r in desk._load(desk.GROLL, {}).get("rows", [])}
     groups = []
-    for g, xs in CMDTY:
+    for g, xs in COMMODITIES:
         rows = []
         for s, nm, root in xs:
             x, r, rl = q.get(s) or {}, rt.get(s) or {}, groll.get(intl.US_ID.get(root, ""))
@@ -636,9 +637,9 @@ def t_roll():
                 "nse": [r for r in n.get("rows", []) if r["kind"] == "Index"], "nseSession": n.get("session")})
 
 
-# ================================================================ ECO: economic calendar
-@router.get("/eco")
-def t_eco():
+# ================================================================ economic calendar
+@router.get("/calendar")
+def t_calendar():
     def load():
         ev = []
         for wk in ("thisweek", "nextweek"):
@@ -660,7 +661,7 @@ def t_eco():
     return _ok({"events": data.cached("teco", 1800, load) or [], "source": "ForexFactory weekly economic calendar", "asOf": time.time()})
 
 
-# ================================================================ N / TOP / CN: news ranked by importance
+# ================================================================ news ranked by importance
 NEWS_TOPICS = {"top": "stock market", "world": "global markets economy", "us": "Wall Street stocks", "india": "Sensex Nifty stock market",
                "europe": "European stocks", "asia": "Asian markets stocks", "earnings": "quarterly earnings results", "fed": "Federal Reserve interest rates inflation",
                "bonds": "Treasury yields bond market", "fx": "dollar currencies forex", "commodities": "oil gold commodity prices",
@@ -712,14 +713,14 @@ def t_news(topic: str = "top", symbol: str = "", sort: str = "importance"):
     return _ok({"topic": topic, "items": out[:40], "asOf": now})
 
 
-# ================================================================ analysis: CORR / SEAG / BETA / DVD / events
+# ================================================================ analysis: correlation, seasons, risk, dividends, events
 def _default_symbols() -> list[str]:
     st = store.load()
     return list(dict.fromkeys([h["symbol"] for h in st.get("holdings", []) if h.get("symbol")] + (st.get("watchlist") or [])))
 
 
-@router.get("/corr")
-def t_corr(symbols: str = "", days: int = 126):
+@router.get("/correlation")
+def t_correlation(symbols: str = "", days: int = 126):
     syms = [s for s in symbols.split(",") if s] or _default_symbols()
     syms = syms[:16]
     hs = data.many_histories(syms, "2y")
@@ -737,8 +738,8 @@ def t_corr(symbols: str = "", days: int = 126):
     return _ok({"symbols": syms, "matrix": np.round(m, 3), "vol": [_r(np.std(r) * math.sqrt(252), 4) for r in R], "days": int(R.shape[1])})
 
 
-@router.get("/seas/{symbol:path}")
-def t_seas(symbol: str):
+@router.get("/seasons/{symbol:path}")
+def t_seasons(symbol: str):
     h = data.get_history(symbol, "10y", "1mo")
     if not h or len(h["c"]) < 14:
         raise HTTPException(404, "Not enough monthly history.")
@@ -755,8 +756,8 @@ def t_seas(symbol: str):
     return _ok({"symbol": symbol, "years": years, "grid": {y: [grid[y].get(m) for m in range(1, 13)] for y in years}, "avg": avg, "hit": hit})
 
 
-@router.get("/beta/{symbol:path}")
-def t_beta(symbol: str, bench: str = ""):
+@router.get("/risk/{symbol:path}")
+def t_risk(symbol: str, bench: str = ""):
     if not bench:
         from .app import _market_for
         bench = (_market_for(symbol, None) or {}).get("benchmark") or "^GSPC"
@@ -779,8 +780,8 @@ def t_beta(symbol: str, bench: str = ""):
                 "points": [[_r(x, 5), _r(y, 5)] for x, y in zip(rb[-104:], ra[-104:])]})
 
 
-@router.get("/dvd/{symbol:path}")
-def t_dvd(symbol: str):
+@router.get("/dividends/{symbol:path}")
+def t_dividends(symbol: str):
     h = data.get_history(symbol, "10y", "1mo")
     if not h:
         raise HTTPException(404, "No history.")
