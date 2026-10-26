@@ -291,14 +291,14 @@ The switch in the header picks how much you see:
 
 - **Simple:** plain-English explanations and the essentials.
 - **Advanced:** every number, indicator and setting (what used to be called Pro).
-- **Pro:** the **CasuallyHedge Terminal**, a Bloomberg-style Launchpad of linked panels driven by function codes, built
-  only from free public data.
+- **Pro:** the **CasuallyHedge Terminal**, a workspace of linked panels driven by function codes, built only from free
+  public data.
 
 **Using the terminal**
 
-- **Command line:** type a ticker and/or a function and press Enter (Bloomberg's `<GO>`), for example `AAPL GP`,
+- **Command line:** type a ticker and/or a function and press Enter, for example `AAPL GP`,
   `NVDA DES`, `RELIANCE IN FA`, `700 HK OMON`, `SPX`, `EURUSD`, `WEI`, `SECT`, `ECO`, or `AI why is gold up?`.
-- **Ticker formats:** Bloomberg-style exchange codes are understood (US, IN, JP, HK, LN, GR, FP, CN, AU…), as are index
+- **Ticker formats:** short exchange codes are understood (US, IN, JP, HK, LN, GR, FP, CN, AU…), as are index
   names like SPX, NKY, UKX, SX5E and NIFTY.
 - **Linked panels:** the function opens in the highlighted panel. Panels marked 🔗 follow the loaded security. Click any
   ticker to load it everywhere; double-click it for full research.
@@ -306,7 +306,7 @@ The switch in the header picks how much you see:
   `HELP` lists every function.
 - **Keys:** `/` focuses the command line, `Alt+1–9` switches pages, `F8` Equity, `F9` Commodities, `F10` Global markets,
   `F2`/`F11` FX & rates.
-- **Launchpad pages:** Launchpad, Global Mkt, Sectors, Movers, Equity, Analysis, Options, FX & Rates, Commodities,
+- **Pages:** Overview, Global Mkt, Sectors, Movers, Equity, Analysis, Options, FX & Rates, Commodities,
   News & Events and Worksheet.
 
 | Group | Functions |

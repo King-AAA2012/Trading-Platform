@@ -1,8 +1,8 @@
 """Pro mode: CasuallyHedge's own terminal.
 
-Bloomberg-style functions (WEI, IMAP, MOST, MOV, sector monitors, RV, DES, FA, ANR, EE, HDS, DVD, OMON, ECO, GC, FXC,
+Market-terminal functions (WEI, IMAP, MOST, MOV, sector monitors, RV, DES, FA, ANR, EE, HDS, DVD, OMON, ECO, GC, FXC,
 WCRS, WIRP, commodities, crypto, news, CORR, SEAG, BETA…) built only from free, public data. Every endpoint is cached so a
-full Launchpad of panels refreshing on screen stays light on the sources. Data notes: Yahoo (prices, fundamentals, options
+full screen of panels refreshing stays light on the sources. Data notes: Yahoo (prices, fundamentals, options
 for US listings), US Treasury (official daily yield curve), CME fed funds futures via Yahoo (rate expectations),
 ForexFactory's weekly calendar feed (economic events), Google News RSS (headlines)."""
 from __future__ import annotations
@@ -665,7 +665,7 @@ NEWS_TOPICS = {"top": "stock market", "world": "global markets economy", "us": "
                "europe": "European stocks", "asia": "Asian markets stocks", "earnings": "quarterly earnings results", "fed": "Federal Reserve interest rates inflation",
                "bonds": "Treasury yields bond market", "fx": "dollar currencies forex", "commodities": "oil gold commodity prices",
                "crypto": "bitcoin crypto market", "mna": "merger acquisition deal", "ipo": "IPO stock market debut"}
-TIER = {"Reuters": 3, "Bloomberg": 3, "Bloomberg.com": 3, "The Wall Street Journal": 3, "WSJ": 3, "Financial Times": 3, "CNBC": 2, "Barron's": 2,
+TIER = {"Reuters": 3, "The Wall Street Journal": 3, "WSJ": 3, "Financial Times": 3, "CNBC": 2, "Barron's": 2,
         "MarketWatch": 2, "The Economic Times": 2, "Economic Times": 2, "Mint": 2, "Livemint": 2, "Business Standard": 2, "Moneycontrol": 2,
         "Nikkei Asia": 2, "Associated Press": 2, "AP News": 2, "BBC": 2, "The New York Times": 2, "Yahoo Finance": 1, "Forbes": 1,
         "Investing.com": 1, "Fortune": 1, "Business Insider": 1, "Seeking Alpha": 1, "The Hindu BusinessLine": 1, "Fox Business": 1}

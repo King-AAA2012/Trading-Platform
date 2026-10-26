@@ -1,5 +1,5 @@
-// Pro mode: the CasuallyHedge Terminal. A Bloomberg-style Launchpad of linked panels, driven by function codes typed in
-// the command line ("AAPL GP", "WEI", "NVDA DES", "SECT", "ECO" + Enter = <GO>). Built only from free, public data.
+// Pro mode: the CasuallyHedge Terminal. A workspace of linked panels, driven by function codes typed in the command line
+// ("AAPL GP", "WEI", "NVDA DES", "SECT", "ECO", then Enter). Built only from free, public data.
 (() => {
   const root = document.getElementById("term");
   if (!root) return;
@@ -28,7 +28,7 @@
   const market = () => (window.CMD && CMD.state && CMD.state.lastMarket) || "us";
 
   // ---------------------------------------------------------------- settings (per browser, mirrored to the account)
-  const DEF = { page: "launchpad", sec: "AAPL", pages: {}, opts: {}, ws: [], hist: [] };
+  const DEF = { page: "overview", sec: "AAPL", pages: {}, opts: {}, ws: [], hist: [] };
   let cfg = (() => { try { return { ...DEF, ...JSON.parse(localStorage.getItem("ch-term") || "{}") }; } catch { return { ...DEF }; } })();
   function save() {
     try { localStorage.setItem("ch-term", JSON.stringify(cfg)); } catch {}
@@ -747,9 +747,9 @@
     if (q) { document.getElementById("asIn").value = q; document.getElementById("asGo").click(); } else document.getElementById("asIn").focus();
   }
 
-  // ================================================================ launchpad pages ("row/col/row/col" on a 12 × 12 grid)
+  // ================================================================ workspace pages ("row/col/row/col" on a 12 × 12 grid)
   const PAGES = [
-    { id: "launchpad", name: "Launchpad", panels: [["MON", "1/1/7/5"], ["IMAP", "1/5/7/9"], ["GP", "1/9/7/13"], ["OVH", "7/1/9/5"], ["N", "9/1/11/5"], ["ECO", "11/1/13/5"], ["RV", "7/5/13/13"]] },
+    { id: "overview", name: "Overview", panels: [["MON", "1/1/7/5"], ["IMAP", "1/5/7/9"], ["GP", "1/9/7/13"], ["OVH", "7/1/9/5"], ["N", "9/1/11/5"], ["ECO", "11/1/13/5"], ["RV", "7/5/13/13"]] },
     { id: "global", name: "Global Mkt", key: "F10", panels: [["WEI", "1/1/13/7"], ["IMAP", "1/7/7/13"], ["MOV", "7/7/13/10"], ["MKT", "7/10/13/13"]] },
     { id: "sectors", name: "Sectors", panels: [["SECT", "1/1/7/5"], ["SECG", "1/5/7/13"], ["SECD", "7/1/13/8"], ["RRG", "7/8/13/13"]] },
     { id: "movers", name: "Movers", panels: [["MOST", "1/1/13/7"], ["MOV", "1/7/7/13"], ["MKT", "7/7/13/13"]] },
@@ -765,7 +765,7 @@
 
   // ================================================================ shell
   root.innerHTML = `<div class="tbar">
-      <span class="tgo" data-tip="Type a ticker and/or a function code, then press Enter (that’s Bloomberg’s &lt;GO&gt;). Examples: AAPL GP · NVDA DES · RELIANCE IN FA · WEI · SECT · ECO · AI why is gold up?">GO ▸</span>
+      <span class="tgo" data-tip="Type a ticker and/or a function code, then press Enter. Examples: AAPL GP · NVDA DES · RELIANCE IN FA · WEI · SECT · ECO · AI why is gold up?">GO ▸</span>
       <div class="tcmdw"><input id="tcmd" class="in" autocomplete="off" spellcheck="false" placeholder="Ticker + function, e.g.  AAPL GP · NVDA DES · WEI · SECT · ECO · TOP   (HELP for all)"><div class="tsug" id="tsug"></div></div>
       <button class="btn sm primary" id="tgoBtn">GO</button>
       <span class="tsec-chip" id="tsecChip" data-tip="Linked security: panels marked 🔗 follow it. Click any ticker in any panel to load it everywhere; double-click to open full research."></span>
@@ -790,7 +790,7 @@
   function stopAll() { panels.forEach((p) => { clearTimeout(p.timer); p.ctx && p.ctx.dispose(); }); }
   function showPage(id) {
     stopAll();
-    cfg.page = PAGES.some((p) => p.id === id) ? id : "launchpad";
+    cfg.page = PAGES.some((p) => p.id === id) ? id : PAGES[0].id;
     save();
     renderTabs();
     const pg = PAGES.find((p) => p.id === cfg.page);
@@ -912,9 +912,9 @@
   const EXCH = { US: "", UN: "", UW: "", IN: ".NS", IS: ".NS", IB: ".BO", JP: ".T", JT: ".T", HK: ".HK", LN: ".L", GR: ".DE", GY: ".DE", FP: ".PA", NA: ".AS", SW: ".SW", SE: ".SW",
     IM: ".MI", SM: ".MC", CN: ".TO", CT: ".TO", AU: ".AX", AT: ".AX", KS: ".KS", TT: ".TW", SP: ".SI", BZ: ".SA", SS: ".ST", DC: ".CO", NO: ".OL" };
   const CCY = new Set(["USD", "EUR", "JPY", "GBP", "CHF", "CAD", "AUD", "NZD", "CNY", "INR", "HKD", "SGD", "SEK", "NOK", "MXN", "BRL", "ZAR", "KRW"]);
-  const YELLOW = new Set(["EQUITY", "EQUITIES", "INDEX", "CURNCY", "CRNCY", "COMDTY", "CMDTY", "CORP", "GOVT", "GO", "<GO>"]);
+  const EXTRA_WORDS = new Set(["EQUITY", "EQUITIES", "STOCK", "INDEX", "CURRENCY", "COMMODITY"]);   // optional words people add after a ticker
   function ticker(toks) {
-    toks = toks.filter((t) => !YELLOW.has(t));
+    toks = toks.filter((t) => !EXTRA_WORDS.has(t));
     if (!toks.length) return null;
     if (toks.length === 1) {
       const t = toks[0];
@@ -932,7 +932,7 @@
     cfg.hist = [s, ...cfg.hist.filter((h) => h !== s)].slice(0, 40);
     save();
     if (/^AI\b/i.test(s)) return askAI(s.replace(/^AI\s*/i, ""));
-    const toks = s.toUpperCase().replace(/<GO>$/, "").split(/\s+/).filter(Boolean);
+    const toks = s.toUpperCase().split(/\s+/).filter(Boolean);
     let code = null;
     const last = toks[toks.length - 1];
     if (F[last] || A[last]) code = toks.pop();
@@ -969,7 +969,7 @@
   }
   function paint() {
     sug.innerHTML = items.map((it, i) => `<div data-i="${i}" class="${i === sel ? "sel" : ""}">${it.hist ? `<span class="dim">↺</span><span>${esc(it.hist)}</span>` : it.sym ? `<span class="fc" style="color:var(--accent)">${esc(it.sym)}</span><span>${esc(it.name)}</span><span class="dim">${esc(it.ex || "")}</span>` : `<span class="fc">${esc(it.code)}</span><span>${esc(it.name)}</span><span class="dim">${esc(it.group)}</span>`}</div>`).join("") +
-      (items.length ? '<div class="dim" style="display:block;font-size:10.5px;cursor:default;border-top:1px solid var(--line)">↑↓ choose · Tab complete · Enter = GO · Esc close</div>' : "");
+      (items.length ? '<div class="dim" style="display:block;font-size:10.5px;cursor:default;border-top:1px solid var(--line)">↑↓ choose · Tab complete · Enter to run · Esc close</div>' : "");
     sug.classList.toggle("show", items.length > 0 && document.activeElement === input);
   }
   function complete(it) {
@@ -1001,7 +1001,7 @@
   function help() {
     const groups = {};
     Object.values(F).forEach((f) => (groups[f.group] ||= []).push(f));
-    const body = UX.modal("⌘ CasuallyHedge Terminal · function directory", `<p class="muted" style="margin-top:0">Type a code in the command line and press Enter (<b>&lt;GO&gt;</b>). Put a ticker first to load it: <code>AAPL GP</code>, <code>RELIANCE IN FA</code>, <code>700 HK DES</code>, <code>EURUSD</code>, <code>SPX</code>. Functions marked 🔗 follow the loaded security. The function opens in the highlighted panel; click any ticker to load it everywhere, double-click for full research. Keys: <kbd>/</kbd> command line · <kbd>Alt</kbd>+<kbd>1–9</kbd> pages · <kbd>F8</kbd> Equity · <kbd>F9</kbd> Commodities · <kbd>F10</kbd> Global · <kbd>F2</kbd>/<kbd>F11</kbd> FX &amp; Rates · <kbd>Esc</kbd> restore.</p>
+    const body = UX.modal("⌘ CasuallyHedge Terminal · function directory", `<p class="muted" style="margin-top:0">Type a code in the command line and press Enter. Put a ticker first to load it: <code>AAPL GP</code>, <code>RELIANCE IN FA</code>, <code>700 HK DES</code>, <code>EURUSD</code>, <code>SPX</code>. Functions marked 🔗 follow the loaded security. The function opens in the highlighted panel; click any ticker to load it everywhere, double-click for full research. Keys: <kbd>/</kbd> command line · <kbd>Alt</kbd>+<kbd>1–9</kbd> pages · <kbd>F8</kbd> Equity · <kbd>F9</kbd> Commodities · <kbd>F10</kbd> Global · <kbd>F2</kbd>/<kbd>F11</kbd> FX &amp; Rates · <kbd>Esc</kbd> restore.</p>
       <div class="thelp">${Object.entries(groups).map(([g, fs]) => `<div><h4 class="th4">${esc(g)}</h4>${fs.map((f) => `<div class="thf" data-c="${f.code}"><span class="fc">${f.code}</span><span><b>${esc(f.name)}</b>${f.sec ? " 🔗" : ""}<small class="dim">${esc(f.tip)}</small></span></div>`).join("")}</div>`).join("")}
       <div><h4 class="th4">Actions</h4>${Object.entries(A).map(([c, a]) => `<div class="thf" data-c="${c}"><span class="fc">${c}</span><span><b>${esc(a.name)}</b></span></div>`).join("")}</div></div>`, true);
     $$(".thf", body).forEach((r) => (r.onclick = () => { document.getElementById("ux-modal").classList.remove("show"); exec(r.dataset.c); }));
